@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Movi</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d0d;
+      --surface: #1a1a2e;
+      --surface2: #16213e;
+      --accent: #e94560;
+      --accent-hover: #ff6b81;
+      --text: #eee;
+      --text-muted: #999;
+      --gold: #f5c518;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    #root { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+    .header { text-align: center; padding: 30px 0 20px; position: relative; }
+    .header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -1px; cursor: pointer; }
+    .header h1 span { color: var(--accent); }
+    .header p { color: var(--text-muted); margin-top: 6px; font-size: 0.95rem; }
+
+    /* Auth Bar */
+    .auth-bar {
+      display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+      padding: 10px 0; margin-bottom: 4px;
+    }
+    .auth-user {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .auth-avatar {
+      width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
+      border: 2px solid var(--accent);
+    }
+    .auth-avatar-placeholder {
+      width: 32px; height: 32px; border-radius: 50%; background: var(--surface2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700; color: var(--accent);
+      border: 2px solid var(--accent);
+    }
+    .auth-name { font-size: 0.85rem; font-weight: 600; }
+    .auth-btn {
+      padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+      font-weight: 600; font-size: 0.85rem; transition: all 0.2s;
+    }
+    .auth-btn-signin {
+      background: var(--accent); color: #fff;
+    }
+    .auth-btn-signin:hover { background: var(--accent-hover); }
+    .auth-btn-signout {
+      background: #333; color: var(--text-muted); font-size: 0.75rem; padding: 6px 12px;
+    }
+    .auth-btn-signout:hover { background: #444; color: var(--text); }
+    .auth-sync {
+      font-size: 0.7rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px;
+    }
+    .auth-sync-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #4caf50; display: inline-block;
+    }
+
+    /* Share */
+    .share-btn {
+      padding: 6px 14px; background: none; border: 1px solid #444;
+      color: var(--text-muted); border-radius: 8px; cursor: pointer;
+      font-size: 0.8rem; transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+    }
+    .share-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Profile View (viewing someone else's rankings) */
+    .profile-banner {
+      background: var(--surface); border-radius: var(--radius); padding: 20px;
+      text-align: center; margin-bottom: 20px;
+    }
+    .profile-avatar {
+      width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
+      border: 3px solid var(--accent); margin-bottom: 10px;
+    }
+    .profile-avatar-ph {
+      width: 64px; height: 64px; border-radius: 50%; background: var(--surface2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; font-weight: 700; color: var(--accent);
+      border: 3px solid var(--accent); margin: 0 auto 10px;
+    }
+    .profile-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+    .profile-count { color: var(--text-muted); font-size: 0.9rem; }
+    .profile-back {
+      display: inline-block; margin-top: 12px; padding: 8px 20px;
+      background: var(--accent); color: #fff; border: none; border-radius: 8px;
+      cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: all 0.2s;
+    }
+    .profile-back:hover { background: var(--accent-hover); }
+
+    /* Tabs for navigation */
+    .nav-tabs {
+      display: flex; gap: 4px; margin-bottom: 20px; background: var(--surface);
+      border-radius: var(--radius); padding: 4px; overflow-x: auto;
+    }
+    .nav-tab {
+      flex: 1; padding: 10px 16px; border: none; background: none;
+      color: var(--text-muted); font-size: 0.85rem; font-weight: 600;
+      border-radius: 8px; cursor: pointer; transition: all 0.2s;
+      white-space: nowrap; text-align: center;
+    }
+    .nav-tab.active { background: var(--accent); color: #fff; }
+    .nav-tab:not(.active):hover { background: var(--surface2); color: var(--text); }
+
+    /* Community */
+    .community-section { margin-top: 10px; }
+    .community-empty {
+      text-align: center; padding: 60px 20px; color: var(--text-muted);
+      border: 2px dashed #333; border-radius: var(--radius);
+    }
+    .community-list { display: flex; flex-direction: column; gap: 8px; }
+    .community-card {
+      display: flex; align-items: center; gap: 12px; padding: 14px;
+      background: var(--surface); border-radius: var(--radius);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .community-card:hover { background: var(--surface2); transform: translateX(4px); }
+    .community-card-avatar {
+      width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
+      border: 2px solid var(--accent); flex-shrink: 0;
+    }
+    .community-card-avatar-ph {
+      width: 44px; height: 44px; border-radius: 50%; background: var(--surface2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; font-weight: 700; color: var(--accent);
+      border: 2px solid var(--accent); flex-shrink: 0;
+    }
+    .community-card-info { flex: 1; min-width: 0; }
+    .community-card-name { font-weight: 600; font-size: 0.95rem; }
+    .community-card-meta { color: var(--text-muted); font-size: 0.8rem; }
+    .community-card-top {
+      display: flex; gap: 4px; margin-top: 6px;
+    }
+    .community-card-top img, .community-card-top .poster-placeholder {
+      width: 28px; height: 42px; border-radius: 4px; object-fit: cover;
+    }
+    .community-card-arrow { color: var(--text-muted); font-size: 1.2rem; flex-shrink: 0; }
+
+    /* Search */
+    .search-section { position: relative; margin-bottom: 24px; }
+    .search-input {
+      width: 100%; padding: 14px 20px; border-radius: var(--radius);
+      border: 2px solid #333; background: var(--surface); color: var(--text);
+      font-size: 1.05rem; outline: none; transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: var(--text-muted); }
+    .search-results {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+      background: var(--surface2); border-radius: 0 0 var(--radius) var(--radius);
+      border: 1px solid #333; border-top: none; max-height: 400px; overflow-y: auto;
+    }
+    .search-item {
+      display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+      cursor: pointer; transition: background 0.15s; border-bottom: 1px solid #1a1a3e;
+    }
+    .search-item:hover { background: rgba(233, 69, 96, 0.15); }
+    .search-item-poster { width: 40px; height: 60px; border-radius: 4px; object-fit: cover; flex-shrink: 0; background: #2a2a4a; }
+    .search-item-info { flex: 1; }
+    .search-item-title { font-weight: 600; font-size: 0.95rem; }
+    .search-item-year { color: var(--text-muted); font-size: 0.85rem; }
+    .search-item-dupe {
+      font-size: 0.75rem; color: var(--gold); background: rgba(245, 197, 24, 0.15);
+      padding: 2px 8px; border-radius: 20px; flex-shrink: 0;
+    }
+    .search-add-custom {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      cursor: pointer; transition: background 0.15s; color: var(--accent);
+      font-weight: 600; border-top: 1px solid #333;
+    }
+    .search-add-custom:hover { background: rgba(233, 69, 96, 0.15); }
+    .search-add-icon {
+      width: 40px; height: 60px; border-radius: 4px; background: #2a2a4a;
+      display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+      color: var(--accent); flex-shrink: 0;
+    }
+    .poster-placeholder {
+      display: flex; align-items: center; justify-content: center;
+      background: #2a2a4a; color: var(--text-muted); font-size: 0.6rem;
+      text-align: center; overflow: hidden;
+    }
+
+    /* Recommendations */
+    .recs-section { margin-bottom: 30px; }
+    .recs-category { margin-bottom: 20px; }
+    .recs-category-title { font-size: 1rem; font-weight: 700; margin-bottom: 10px; color: var(--text-muted); }
+    .recs-row {
+      display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px;
+      scrollbar-width: thin; scrollbar-color: #333 transparent;
+    }
+    .recs-row::-webkit-scrollbar { height: 6px; }
+    .recs-row::-webkit-scrollbar-track { background: transparent; }
+    .recs-row::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    .rec-card {
+      flex-shrink: 0; width: 110px; cursor: pointer; transition: transform 0.2s, opacity 0.2s;
+      position: relative;
+    }
+    .rec-card:hover { transform: scale(1.05); }
+    .rec-card.ranked { opacity: 0.35; }
+    .rec-card img, .rec-card .poster-placeholder {
+      width: 110px; height: 165px; border-radius: 8px; object-fit: cover;
+    }
+    .rec-card-title {
+      font-size: 0.75rem; margin-top: 4px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .rec-card-year { font-size: 0.65rem; color: var(--text-muted); }
+    .rec-card-badge {
+      position: absolute; top: 6px; right: 6px; background: rgba(245, 197, 24, 0.9);
+      color: #000; font-size: 0.6rem; font-weight: 700; padding: 2px 5px; border-radius: 4px;
+    }
+
+    /* Comparison */
+    .comparison-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.88); z-index: 200;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .comparison-box {
+      background: var(--surface); border-radius: 20px; padding: 30px;
+      max-width: 650px; width: 100%; text-align: center;
+    }
+    .comparison-title { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 6px; }
+    .comparison-progress { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px; }
+    .comparison-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .comparison-card {
+      cursor: pointer; border-radius: var(--radius); overflow: hidden;
+      border: 3px solid transparent; transition: all 0.2s; background: var(--surface2);
+    }
+    .comparison-card:hover { border-color: var(--accent); transform: scale(1.03); }
+    .comparison-card img, .comparison-card .poster-placeholder {
+      width: 100%; aspect-ratio: 2/3; object-fit: cover;
+    }
+    .comparison-card-info { padding: 10px; }
+    .comparison-card-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+    .comparison-card-year { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 8px; }
+    .comparison-label {
+      padding: 8px; background: var(--accent); color: #fff;
+      border-radius: 8px; font-weight: 600; font-size: 0.85rem;
+    }
+    .comparison-cancel {
+      margin-top: 16px; padding: 10px 24px; background: none; border: 1px solid #555;
+      color: var(--text-muted); border-radius: 8px; cursor: pointer; font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+    .comparison-cancel:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Ranked List */
+    .ranked-section { margin-top: 10px; }
+    .ranked-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px; gap: 8px; flex-wrap: wrap;
+    }
+    .ranked-header h2 { font-size: 1.3rem; }
+    .ranked-header-btns { display: flex; gap: 8px; }
+    .clear-btn {
+      padding: 6px 14px; background: none; border: 1px solid #444;
+      color: var(--text-muted); border-radius: 8px; cursor: pointer;
+      font-size: 0.8rem; transition: all 0.2s;
+    }
+    .clear-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .ranked-empty {
+      text-align: center; padding: 60px 20px; color: var(--text-muted);
+      border: 2px dashed #333; border-radius: var(--radius);
+    }
+    .ranked-empty p:first-child { font-size: 2rem; margin-bottom: 10px; }
+    .ranked-list { display: flex; flex-direction: column; gap: 6px; }
+    .ranked-item {
+      display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+      background: var(--surface); border-radius: var(--radius);
+      transition: background 0.15s;
+    }
+    .ranked-item:hover { background: var(--surface2); }
+    .rank-number {
+      font-size: 1.3rem; font-weight: 800; min-width: 32px; text-align: center;
+      color: var(--text-muted);
+    }
+    .ranked-item:nth-child(1) .rank-number { color: var(--gold); }
+    .ranked-item:nth-child(2) .rank-number { color: #c0c0c0; }
+    .ranked-item:nth-child(3) .rank-number { color: #cd7f32; }
+    .ranked-poster { width: 40px; height: 60px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+    .ranked-poster-ph { width: 40px; height: 60px; border-radius: 6px; }
+    .ranked-item-info { flex: 1; min-width: 0; }
+    .ranked-item-title { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ranked-item-year { color: var(--text-muted); font-size: 0.75rem; }
+    .score-badge {
+      font-size: 0.85rem; font-weight: 800; min-width: 38px; text-align: center;
+      padding: 4px 6px; border-radius: 6px; flex-shrink: 0;
+    }
+    .score-high { background: rgba(76, 175, 80, 0.2); color: #66bb6a; }
+    .score-mid { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+    .score-low { background: rgba(244, 67, 54, 0.2); color: #ef5350; }
+    .remove-btn {
+      background: none; border: none; color: #444; cursor: pointer;
+      font-size: 1rem; padding: 4px 6px; transition: color 0.2s; border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .remove-btn:hover { color: var(--accent); }
+
+    /* Confirm */
+    .confirm-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); z-index: 300;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .confirm-box {
+      background: var(--surface); padding: 30px; border-radius: var(--radius);
+      text-align: center; max-width: 350px;
+    }
+    .confirm-box p { margin-bottom: 20px; }
+    .confirm-btns { display: flex; gap: 12px; justify-content: center; }
+    .confirm-btns button {
+      padding: 10px 24px; border-radius: 8px; border: none; cursor: pointer;
+      font-weight: 600; font-size: 0.95rem; transition: all 0.2s;
+    }
+    .confirm-yes { background: var(--accent); color: #fff; }
+    .confirm-yes:hover { background: var(--accent-hover); }
+    .confirm-no { background: #333; color: var(--text); }
+    .confirm-no:hover { background: #444; }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+      background: var(--surface2); color: var(--text); padding: 12px 24px;
+      border-radius: 10px; font-size: 0.9rem; z-index: 500;
+      border: 1px solid #333; animation: fadeInUp 0.3s ease;
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* Sign-in prompt */
+    .signin-prompt {
+      text-align: center; padding: 16px; background: var(--surface);
+      border-radius: var(--radius); margin-bottom: 20px;
+      border: 1px solid #333;
+    }
+    .signin-prompt p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 10px; }
+
+    /* Loading spinner */
+    .spinner {
+      display: inline-block; width: 20px; height: 20px;
+      border: 2px solid #333; border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      .comparison-cards { gap: 10px; }
+      .comparison-box { padding: 20px 14px; }
+      .comparison-card-title { font-size: 0.8rem; }
+      .header h1 { font-size: 1.6rem; }
+      .rec-card { width: 95px; }
+      .rec-card img, .rec-card .poster-placeholder { width: 95px; height: 142px; }
+      .nav-tabs { gap: 2px; }
+      .nav-tab { padding: 8px 10px; font-size: 0.8rem; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Firebase SDK (compat version for CDN usage) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="movies.js"></script>
+  <script src="firebase-config.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    // ─── Firebase Init ──────────────────────────────────────────
+    const FIREBASE_READY = typeof FIREBASE_CONFIG !== "undefined"
+      && FIREBASE_CONFIG.apiKey
+      && FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY_HERE";
+
+    let db = null;
+    let auth = null;
+    if (FIREBASE_READY) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      auth = firebase.auth();
+      db = firebase.firestore();
+    }
+
+    // ─── Process Movie Database ─────────────────────────────────
+    const TMDB_IMG = "https://image.tmdb.org/t/p/w200";
+    const TMDB_IMG_LG = "https://image.tmdb.org/t/p/w300";
+
+    const seen = new Set();
+    const MOVIE_DB = MOVIE_DATA
+      .map(([id, title, year, genre, poster]) => ({ id, title, year: String(year), genre, poster }))
+      .filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+
+    // ─── Poster Component ───────────────────────────────────────
+    function Poster({ poster, title, className, style, size }) {
+      const [failed, setFailed] = React.useState(false);
+      const base = size === "lg" ? TMDB_IMG_LG : TMDB_IMG;
+      if (poster && !failed) {
+        return <img src={`${base}${poster}`} alt={title} className={className} style={style} loading="lazy" onError={() => setFailed(true)} />;
+      }
+      return (
+        <div className={`poster-placeholder ${className || ""}`} style={style}>
+          {title ? title.slice(0, 20) : "?"}
+        </div>
+      );
+    }
+
+    // ─── Score Calculation ───────────────────────────────────────
+    function getScore(index, total) {
+      if (total <= 1) return 10.0;
+      return Math.round((10.0 * (1 - index / (total - 1))) * 10) / 10;
+    }
+
+    function scoreClass(score) {
+      if (score >= 7) return "score-high";
+      if (score >= 4) return "score-mid";
+      return "score-low";
+    }
+
+    // ─── Binary Insertion ───────────────────────────────────────
+    function createSession(newMovie, rankedList) {
+      const session = {
+        newMovie, list: rankedList, low: 0, high: rankedList.length,
+        step: 0, maxSteps: Math.ceil(Math.log2(rankedList.length + 1)),
+      };
+      return advanceSession(session);
+    }
+
+    function advanceSession(session) {
+      if (session.low >= session.high) return { ...session, done: true, insertIndex: session.low };
+      const mid = Math.floor((session.low + session.high) / 2);
+      return { ...session, done: false, compareMovie: session.list[mid], mid };
+    }
+
+    function recordChoice(session, preferNew) {
+      const next = {
+        ...session, step: session.step + 1,
+        low: preferNew ? session.low : session.mid + 1,
+        high: preferNew ? session.mid : session.high,
+      };
+      return advanceSession(next);
+    }
+
+    // ─── Firestore Helpers ──────────────────────────────────────
+    async function saveProfile(user, rankedList) {
+      if (!db || !user) return;
+      try {
+        await db.collection("profiles").doc(user.uid).set({
+          displayName: user.displayName || "Anonymous",
+          photoURL: user.photoURL || null,
+          movies: rankedList.map(m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster })),
+          movieCount: rankedList.length,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.error("Failed to save profile:", e);
+      }
+    }
+
+    async function loadProfile(uid) {
+      if (!db) return null;
+      try {
+        const doc = await db.collection("profiles").doc(uid).get();
+        if (doc.exists) return doc.data();
+      } catch (e) {
+        console.error("Failed to load profile:", e);
+      }
+      return null;
+    }
+
+    async function loadCommunityProfiles() {
+      if (!db) return [];
+      try {
+        const snap = await db.collection("profiles")
+          .where("movieCount", ">", 0)
+          .orderBy("movieCount", "desc")
+          .limit(50)
+          .get();
+        return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      } catch (e) {
+        console.error("Failed to load community:", e);
+        return [];
+      }
+    }
+
+    // ─── Recommendations ────────────────────────────────────────
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function Recommendations({ onSelect, rankedIds }) {
+      const categories = useMemo(() => {
+        const popular = MOVIE_DB.filter(m => [278,155,13,550,27205,603,680,329,597,98,862,8587,12,105,76341,157336,872585,361743,545611,496243,475557,346698,693134,533535,402431,299534,299536,24428,1726,118340,284054,293660,263115,324857,634649,414906,109445,277834,354912,301528,10681,585,38,37799,106646,562,949,807,274,769,500,115,578,694,348,679,62,85,10193,14160,9806,2062,244786,1124,77,6977,24,73,7345,210577,335984,78,37165,68718,16869,424,424694,332562,419430,530915,374720,313369,157336].includes(m.id));
+        const newReleases = MOVIE_DB.filter(m => parseInt(m.year) >= 2023);
+        const classics = MOVIE_DB.filter(m => parseInt(m.year) <= 1990);
+        const horror = MOVIE_DB.filter(m => m.genre === "Horror");
+        const animation = MOVIE_DB.filter(m => m.genre === "Animation");
+        const comedy = MOVIE_DB.filter(m => m.genre === "Comedy" || m.genre === "Romance");
+        return [
+          { title: "Popular", movies: shuffle(popular).slice(0, 20) },
+          { title: "New Releases", movies: shuffle(newReleases).slice(0, 20) },
+          { title: "Horror", movies: shuffle(horror).slice(0, 15) },
+          { title: "Animation", movies: shuffle(animation).slice(0, 15) },
+          { title: "Comedies & Romance", movies: shuffle(comedy).slice(0, 15) },
+          { title: "Classics", movies: shuffle(classics).slice(0, 15) },
+        ];
+      }, []);
+
+      return (
+        <div className="recs-section">
+          {categories.map(cat => (
+            <div key={cat.title} className="recs-category">
+              <div className="recs-category-title">{cat.title}</div>
+              <div className="recs-row">
+                {cat.movies.map(m => {
+                  const isRanked = rankedIds.has(m.id);
+                  return (
+                    <div key={m.id} className={`rec-card ${isRanked ? "ranked" : ""}`}
+                      onClick={() => !isRanked && onSelect(m)}>
+                      {isRanked && <div className="rec-card-badge">Ranked</div>}
+                      <Poster poster={m.poster} title={m.title}
+                        style={{ width: "100%", height: "auto", aspectRatio: "2/3", borderRadius: 8 }} />
+                      <div className="rec-card-title">{m.title}</div>
+                      <div className="rec-card-year">{m.year}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // ─── Search Bar ─────────────────────────────────────────────
+    function SearchBar({ onSelect, rankedIds }) {
+      const [query, setQuery] = useState("");
+      const [open, setOpen] = useState(false);
+      const containerRef = useRef(null);
+
+      const results = useMemo(() => {
+        if (!query.trim()) return [];
+        const q = query.toLowerCase();
+        return MOVIE_DB.filter(m =>
+          m.title.toLowerCase().includes(q) || m.year.includes(q) || m.genre.toLowerCase().includes(q)
+        ).slice(0, 10);
+      }, [query]);
+
+      useEffect(() => { setOpen(results.length > 0 || query.trim().length > 0); }, [results, query]);
+
+      useEffect(() => {
+        function handleClick(e) {
+          if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+        }
+        document.addEventListener("mousedown", handleClick);
+        return () => document.removeEventListener("mousedown", handleClick);
+      }, []);
+
+      function handleSelect(movie) {
+        if (rankedIds.has(movie.id)) return;
+        setQuery(""); setOpen(false); onSelect(movie);
+      }
+
+      function handleAddCustom() {
+        const title = query.trim();
+        if (!title) return;
+        setQuery(""); setOpen(false);
+        onSelect({ id: "custom_" + Date.now(), title, year: "", genre: "", poster: null });
+      }
+
+      return (
+        <div className="search-section" ref={containerRef}>
+          <input className="search-input" type="text" placeholder="Search for a movie to rank..."
+            value={query} onChange={e => setQuery(e.target.value)}
+            onFocus={() => query.trim() && setOpen(true)} />
+          {open && (
+            <div className="search-results">
+              {results.map(m => {
+                const isDupe = rankedIds.has(m.id);
+                return (
+                  <div key={m.id} className="search-item" style={isDupe ? { opacity: 0.5 } : {}}
+                    onClick={() => handleSelect(m)}>
+                    <Poster poster={m.poster} title={m.title} className="search-item-poster" />
+                    <div className="search-item-info">
+                      <div className="search-item-title">{m.title}</div>
+                      <div className="search-item-year">{m.year} &middot; {m.genre}</div>
+                    </div>
+                    {isDupe && <span className="search-item-dupe">Already ranked</span>}
+                  </div>
+                );
+              })}
+              {query.trim() && (
+                <div className="search-add-custom" onClick={handleAddCustom}>
+                  <div className="search-add-icon">+</div>
+                  <div>Add "{query.trim()}" as custom movie</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ─── Comparison View ────────────────────────────────────────
+    function ComparisonView({ session, onChoice, onCancel }) {
+      if (!session || session.done) return null;
+      const { newMovie, compareMovie, step, maxSteps } = session;
+
+      function Card({ movie, onClick }) {
+        return (
+          <div className="comparison-card" onClick={onClick}>
+            <Poster poster={movie.poster} title={movie.title} size="lg" />
+            <div className="comparison-card-info">
+              <div className="comparison-card-title">{movie.title}</div>
+              <div className="comparison-card-year">{movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}</div>
+              <div className="comparison-label">I prefer this</div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="comparison-overlay">
+          <div className="comparison-box">
+            <div className="comparison-title">Which movie do you prefer?</div>
+            <div className="comparison-progress">Comparison {step + 1} of ~{Math.max(maxSteps, 1)}</div>
+            <div className="comparison-cards">
+              <Card movie={newMovie} onClick={() => onChoice(true)} />
+              <Card movie={compareMovie} onClick={() => onChoice(false)} />
+            </div>
+            <button className="comparison-cancel" onClick={onCancel}>Cancel</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── Ranked List (with optional read-only mode) ─────────────
+    function RankedList({ list, onRemove, onClear, onShare, readOnly, user }) {
+      const [confirmClear, setConfirmClear] = useState(false);
+      const total = list.length;
+
+      if (total === 0 && !readOnly) {
+        return (
+          <div className="ranked-section">
+            <h2 style={{ marginBottom: 16 }}>Your Rankings</h2>
+            <div className="ranked-empty">
+              <p>🎬</p>
+              <p>Search or pick a movie above to start ranking!</p>
+            </div>
+          </div>
+        );
+      }
+
+      if (total === 0 && readOnly) {
+        return (
+          <div className="ranked-section">
+            <div className="ranked-empty">
+              <p>🎬</p>
+              <p>No movies ranked yet.</p>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="ranked-section">
+          <div className="ranked-header">
+            <h2>{readOnly ? "Rankings" : "Your Rankings"} ({total})</h2>
+            {!readOnly && (
+              <div className="ranked-header-btns">
+                {user && onShare && (
+                  <button className="share-btn" onClick={onShare}>
+                    <span>&#x1F517;</span> Share
+                  </button>
+                )}
+                <button className="clear-btn" onClick={() => setConfirmClear(true)}>Clear All</button>
+              </div>
+            )}
+          </div>
+          <div className="ranked-list">
+            {list.map((movie, i) => {
+              const score = getScore(i, total);
+              return (
+                <div key={movie.id} className="ranked-item">
+                  <div className="rank-number">{i + 1}</div>
+                  <Poster poster={movie.poster} title={movie.title}
+                    className={movie.poster ? "ranked-poster" : "ranked-poster-ph poster-placeholder"} />
+                  <div className="ranked-item-info">
+                    <div className="ranked-item-title">{movie.title}</div>
+                    <div className="ranked-item-year">{movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}</div>
+                  </div>
+                  <div className={`score-badge ${scoreClass(score)}`}>{score.toFixed(1)}</div>
+                  {!readOnly && <button className="remove-btn" onClick={() => onRemove(movie.id)} title="Remove">&#x2715;</button>}
+                </div>
+              );
+            })}
+          </div>
+          {confirmClear && (
+            <div className="confirm-overlay">
+              <div className="confirm-box">
+                <p>Remove all {total} movies from your rankings?</p>
+                <div className="confirm-btns">
+                  <button className="confirm-yes" onClick={() => { onClear(); setConfirmClear(false); }}>Yes, Clear All</button>
+                  <button className="confirm-no" onClick={() => setConfirmClear(false)}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ─── Community View ─────────────────────────────────────────
+    function CommunityView({ onViewProfile, currentUid }) {
+      const [profiles, setProfiles] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        loadCommunityProfiles().then(p => {
+          setProfiles(p.filter(pr => pr.uid !== currentUid));
+          setLoading(false);
+        });
+      }, [currentUid]);
+
+      if (!FIREBASE_READY) {
+        return (
+          <div className="community-section">
+            <div className="community-empty">
+              <p style={{ fontSize: "2rem", marginBottom: 10 }}>&#x1F465;</p>
+              <p>Set up Firebase to see other users' rankings.</p>
+              <p style={{ fontSize: "0.8rem", marginTop: 8 }}>See firebase-config.js for instructions.</p>
+            </div>
+          </div>
+        );
+      }
+
+      if (loading) {
+        return (
+          <div className="community-section" style={{ textAlign: "center", padding: 40 }}>
+            <div className="spinner"></div>
+            <p style={{ color: "var(--text-muted)", marginTop: 12, fontSize: "0.85rem" }}>Loading community...</p>
+          </div>
+        );
+      }
+
+      if (profiles.length === 0) {
+        return (
+          <div className="community-section">
+            <div className="community-empty">
+              <p style={{ fontSize: "2rem", marginBottom: 10 }}>&#x1F465;</p>
+              <p>No other users yet. Share your link with friends!</p>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="community-section">
+          <div className="community-list">
+            {profiles.map(p => (
+              <div key={p.uid} className="community-card" onClick={() => onViewProfile(p.uid)}>
+                {p.photoURL
+                  ? <img src={p.photoURL} alt="" className="community-card-avatar" referrerPolicy="no-referrer" />
+                  : <div className="community-card-avatar-ph">{(p.displayName || "?")[0]}</div>
+                }
+                <div className="community-card-info">
+                  <div className="community-card-name">{p.displayName || "Anonymous"}</div>
+                  <div className="community-card-meta">{p.movieCount || 0} movies ranked</div>
+                  {p.movies && p.movies.length > 0 && (
+                    <div className="community-card-top">
+                      {p.movies.slice(0, 5).map(m => (
+                        <Poster key={m.id} poster={m.poster} title={m.title}
+                          style={{ width: 28, height: 42, borderRadius: 4 }} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="community-card-arrow">&#x203A;</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ─── Profile View (viewing someone else's rankings) ─────────
+    function ProfileView({ uid, onBack }) {
+      const [profile, setProfile] = useState(null);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        loadProfile(uid).then(p => { setProfile(p); setLoading(false); });
+      }, [uid]);
+
+      if (loading) {
+        return (
+          <div style={{ textAlign: "center", padding: 60 }}>
+            <div className="spinner"></div>
+            <p style={{ color: "var(--text-muted)", marginTop: 12 }}>Loading rankings...</p>
+          </div>
+        );
+      }
+
+      if (!profile) {
+        return (
+          <div style={{ textAlign: "center", padding: 60 }}>
+            <p style={{ color: "var(--text-muted)" }}>Profile not found.</p>
+            <button className="profile-back" onClick={onBack}>Go Back</button>
+          </div>
+        );
+      }
+
+      return (
+        <div>
+          <div className="profile-banner">
+            {profile.photoURL
+              ? <img src={profile.photoURL} alt="" className="profile-avatar" referrerPolicy="no-referrer" />
+              : <div className="profile-avatar-ph">{(profile.displayName || "?")[0]}</div>
+            }
+            <div className="profile-name">{profile.displayName || "Anonymous"}</div>
+            <div className="profile-count">{(profile.movies || []).length} movies ranked</div>
+            <button className="profile-back" onClick={onBack}>&#x2190; Back</button>
+          </div>
+          <RankedList list={profile.movies || []} readOnly={true} />
+        </div>
+      );
+    }
+
+    // ─── Auth Bar ───────────────────────────────────────────────
+    function AuthBar({ user, onSignIn, onSignOut, authLoading }) {
+      if (!FIREBASE_READY) return null;
+
+      if (authLoading) {
+        return (
+          <div className="auth-bar">
+            <div className="spinner"></div>
+          </div>
+        );
+      }
+
+      if (!user) {
+        return (
+          <div className="auth-bar">
+            <button className="auth-btn auth-btn-signin" onClick={onSignIn}>
+              Sign in with Google
+            </button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="auth-bar">
+          <div className="auth-sync">
+            <span className="auth-sync-dot"></span> Synced
+          </div>
+          <div className="auth-user">
+            {user.photoURL
+              ? <img src={user.photoURL} alt="" className="auth-avatar" referrerPolicy="no-referrer" />
+              : <div className="auth-avatar-placeholder">{(user.displayName || "?")[0]}</div>
+            }
+            <span className="auth-name">{user.displayName}</span>
+          </div>
+          <button className="auth-btn auth-btn-signout" onClick={onSignOut}>Sign Out</button>
+        </div>
+      );
+    }
+
+    // ─── Toast ──────────────────────────────────────────────────
+    function Toast({ message }) {
+      if (!message) return null;
+      return <div className="toast">{message}</div>;
+    }
+
+    // ─── App ────────────────────────────────────────────────────
+    function App() {
+      const [rankedList, setRankedList] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("movi-ranked-list")) || []; } catch { return []; }
+      });
+      const [session, setSession] = useState(null);
+      const [toast, setToast] = useState("");
+      const [user, setUser] = useState(null);
+      const [authLoading, setAuthLoading] = useState(FIREBASE_READY);
+      const [tab, setTab] = useState("rank"); // "rank", "community"
+      const [viewingUid, setViewingUid] = useState(null);
+      const saveTimerRef = useRef(null);
+
+      const rankedIds = new Set(rankedList.map(m => m.id));
+
+      // Check URL for shared profile
+      useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const sharedUid = params.get("u");
+        if (sharedUid && FIREBASE_READY) {
+          setViewingUid(sharedUid);
+        }
+      }, []);
+
+      // Firebase auth listener
+      useEffect(() => {
+        if (!auth) return;
+        const unsub = auth.onAuthStateChanged(async (firebaseUser) => {
+          setUser(firebaseUser);
+          setAuthLoading(false);
+          if (firebaseUser) {
+            // Load cloud rankings
+            const profile = await loadProfile(firebaseUser.uid);
+            if (profile && profile.movies && profile.movies.length > 0) {
+              const localList = JSON.parse(localStorage.getItem("movi-ranked-list") || "[]");
+              // If cloud has data and local is empty, use cloud data
+              if (localList.length === 0) {
+                setRankedList(profile.movies);
+              } else if (profile.movieCount > localList.length) {
+                // If cloud has more movies, use cloud
+                setRankedList(profile.movies);
+              }
+              // Otherwise keep local (user may have ranked while offline)
+            }
+          }
+        });
+        return () => unsub();
+      }, []);
+
+      // Save to localStorage
+      useEffect(() => {
+        localStorage.setItem("movi-ranked-list", JSON.stringify(rankedList));
+      }, [rankedList]);
+
+      // Debounced save to Firestore
+      useEffect(() => {
+        if (!user || !db) return;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(() => {
+          saveProfile(user, rankedList);
+        }, 1500);
+        return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+      }, [rankedList, user]);
+
+      function showToast(msg) {
+        setToast(msg);
+        setTimeout(() => setToast(""), 2500);
+      }
+
+      async function handleSignIn() {
+        if (!auth) return;
+        try {
+          const provider = new firebase.auth.GoogleAuthProvider();
+          await auth.signInWithPopup(provider);
+          showToast("Signed in! Your rankings will sync to the cloud.");
+        } catch (e) {
+          if (e.code !== "auth/popup-closed-by-user") {
+            showToast("Sign-in failed. Please try again.");
+            console.error("Sign-in error:", e);
+          }
+        }
+      }
+
+      async function handleSignOut() {
+        if (!auth) return;
+        await auth.signOut();
+        showToast("Signed out.");
+      }
+
+      function handleShare() {
+        if (!user) {
+          showToast("Sign in to share your rankings!");
+          return;
+        }
+        const url = window.location.origin + window.location.pathname + "?u=" + user.uid;
+        navigator.clipboard.writeText(url).then(() => {
+          showToast("Share link copied to clipboard!");
+        }).catch(() => {
+          // Fallback: show the URL
+          showToast("Share URL: " + url);
+        });
+      }
+
+      function handleSelectMovie(movie) {
+        if (rankedIds.has(movie.id)) {
+          showToast(`"${movie.title}" is already ranked!`);
+          return;
+        }
+        if (rankedList.length === 0) {
+          setRankedList([movie]);
+          const score = getScore(0, 1);
+          showToast(`"${movie.title}" added as #1 (${score.toFixed(1)})!`);
+          return;
+        }
+        const s = createSession(movie, rankedList);
+        if (s.done) {
+          const newList = [...rankedList];
+          newList.splice(s.insertIndex, 0, movie);
+          setRankedList(newList);
+          const score = getScore(s.insertIndex, newList.length);
+          showToast(`"${movie.title}" ranked #${s.insertIndex + 1} (${score.toFixed(1)})!`);
+        } else {
+          setSession(s);
+        }
+      }
+
+      function handleChoice(preferNew) {
+        const next = recordChoice(session, preferNew);
+        if (next.done) {
+          const newList = [...rankedList];
+          newList.splice(next.insertIndex, 0, next.newMovie);
+          setRankedList(newList);
+          const score = getScore(next.insertIndex, newList.length);
+          showToast(`"${next.newMovie.title}" ranked #${next.insertIndex + 1} (${score.toFixed(1)})!`);
+          setSession(null);
+        } else {
+          setSession(next);
+        }
+      }
+
+      function handleRemove(id) { setRankedList(prev => prev.filter(m => m.id !== id)); }
+      function handleClear() { setRankedList([]); }
+
+      function handleViewProfile(uid) {
+        setViewingUid(uid);
+        setTab("community");
+      }
+
+      function handleBackFromProfile() {
+        setViewingUid(null);
+        // Clear URL param
+        const url = new URL(window.location);
+        url.searchParams.delete("u");
+        window.history.replaceState({}, "", url);
+      }
+
+      function handleGoHome() {
+        setViewingUid(null);
+        setTab("rank");
+        const url = new URL(window.location);
+        url.searchParams.delete("u");
+        window.history.replaceState({}, "", url);
+      }
+
+      // If viewing someone else's profile
+      if (viewingUid && FIREBASE_READY) {
+        // Don't show their own profile as a "shared" view
+        if (user && viewingUid === user.uid) {
+          handleBackFromProfile();
+        } else {
+          return (
+            <div>
+              <div className="header">
+                <h1 onClick={handleGoHome}>&#x1F3AC; Mo<span>vi</span></h1>
+                <p>Movie rankings</p>
+              </div>
+              <AuthBar user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} authLoading={authLoading} />
+              <ProfileView uid={viewingUid} onBack={handleBackFromProfile} />
+              <Toast message={toast} />
+              <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
+                <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:"8px",color:"var(--text-muted)",textDecoration:"none",fontSize:"12px"}}>
+                  <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg" alt="TMDB" style={{height:"16px"}} />
+                  Data provided by TMDB
+                </a>
+              </footer>
+            </div>
+          );
+        }
+      }
+
+      return (
+        <div>
+          <div className="header">
+            <h1 onClick={handleGoHome}>&#x1F3AC; Mo<span>vi</span></h1>
+            <p>Rank movies head-to-head. No star ratings — just your preferences.</p>
+          </div>
+          <AuthBar user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} authLoading={authLoading} />
+
+          {FIREBASE_READY && !user && !authLoading && rankedList.length > 0 && (
+            <div className="signin-prompt">
+              <p>Sign in to save your rankings to the cloud and share them with friends.</p>
+              <button className="auth-btn auth-btn-signin" onClick={handleSignIn}>
+                Sign in with Google
+              </button>
+            </div>
+          )}
+
+          {FIREBASE_READY && (
+            <div className="nav-tabs">
+              <button className={`nav-tab ${tab === "rank" ? "active" : ""}`} onClick={() => setTab("rank")}>
+                My Rankings
+              </button>
+              <button className={`nav-tab ${tab === "community" ? "active" : ""}`} onClick={() => setTab("community")}>
+                Community
+              </button>
+            </div>
+          )}
+
+          {tab === "rank" && (
+            <>
+              <SearchBar onSelect={handleSelectMovie} rankedIds={rankedIds} />
+              <Recommendations onSelect={handleSelectMovie} rankedIds={rankedIds} />
+              <RankedList list={rankedList} onRemove={handleRemove} onClear={handleClear}
+                onShare={handleShare} user={user} />
+            </>
+          )}
+
+          {tab === "community" && (
+            <CommunityView onViewProfile={handleViewProfile} currentUid={user ? user.uid : null} />
+          )}
+
+          <ComparisonView session={session} onChoice={handleChoice} onCancel={() => setSession(null)} />
+          <Toast message={toast} />
+          <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
+            <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:"8px",color:"var(--text-muted)",textDecoration:"none",fontSize:"12px"}}>
+              <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg" alt="TMDB" style={{height:"16px"}} />
+              Data provided by TMDB
+            </a>
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
