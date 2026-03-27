@@ -947,6 +947,16 @@
         return () => unsub();
       }, []);
 
+      // Handle redirect result (for browsers that used signInWithRedirect)
+      useEffect(() => {
+        if (!auth) return;
+        auth.getRedirectResult().then(result => {
+          if (result && result.user) {
+            showToast("Signed in! Your rankings will sync to the cloud.");
+          }
+        }).catch(e => console.error("Redirect sign-in error:", e));
+      }, []);
+
       // Save to localStorage
       useEffect(() => {
         localStorage.setItem("movi-ranked-list", JSON.stringify(rankedList));
@@ -971,13 +981,23 @@
         if (!auth) return;
         try {
           const provider = new firebase.auth.GoogleAuthProvider();
-          await auth.signInWithPopup(provider);
-          showToast("Signed in! Your rankings will sync to the cloud.");
-        } catch (e) {
-          if (e.code !== "auth/popup-closed-by-user") {
-            showToast("Sign-in failed. Please try again.");
-            console.error("Sign-in error:", e);
+          // Try popup first, fall back to redirect for browsers that block popups
+          try {
+            await auth.signInWithPopup(provider);
+            showToast("Signed in! Your rankings will sync to the cloud.");
+          } catch (popupErr) {
+            if (popupErr.code === "auth/popup-blocked" ||
+                popupErr.code === "auth/popup-closed-by-user" ||
+                popupErr.code === "auth/cancelled-popup-request") {
+              // Fall back to redirect method (works on all browsers)
+              await auth.signInWithRedirect(provider);
+            } else {
+              throw popupErr;
+            }
           }
+        } catch (e) {
+          showToast("Sign-in failed. Please try again.");
+          console.error("Sign-in error:", e);
         }
       }
 
