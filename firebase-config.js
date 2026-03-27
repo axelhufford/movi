@@ -6,3 +6,6 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "414090157982",
   appId: "1:414090157982:web:07b1dd5597cc9b831b808f"
 };
+
+// Free TMDB API key for live movie search (get yours at https://www.themoviedb.org/settings/api)
+var TMDB_API_KEY_CONFIG = "39a17d2f20e6ebc19af8eadbf015f5ab";

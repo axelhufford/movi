@@ -426,11 +426,34 @@
     // ─── Process Movie Database ─────────────────────────────────
     const TMDB_IMG = "https://image.tmdb.org/t/p/w200";
     const TMDB_IMG_LG = "https://image.tmdb.org/t/p/w300";
+    const TMDB_API_KEY = "39a17d2f20e6ebc19af8eadbf015f5ab";
+    const TMDB_SEARCH_URL = "https://api.themoviedb.org/3/search/movie";
+
+    const GENRE_MAP = {28:"Action",12:"Adventure",16:"Animation",35:"Comedy",80:"Crime",99:"Documentary",18:"Drama",10751:"Family",14:"Fantasy",36:"History",27:"Horror",10402:"Music",9648:"Mystery",10749:"Romance",878:"Sci-Fi",10770:"TV Movie",53:"Thriller",10752:"War",37:"Western"};
 
     const seen = new Set();
     const MOVIE_DB = MOVIE_DATA
       .map(([id, title, year, genre, poster]) => ({ id, title, year: String(year), genre, poster }))
       .filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+    const MOVIE_DB_IDS = new Set(MOVIE_DB.map(m => m.id));
+
+    async function searchTMDB(query) {
+      try {
+        const resp = await fetch(`${TMDB_SEARCH_URL}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&language=en-US&page=1`);
+        if (!resp.ok) return [];
+        const data = await resp.json();
+        return (data.results || []).map(m => ({
+          id: m.id,
+          title: m.title,
+          year: m.release_date ? m.release_date.slice(0, 4) : "",
+          genre: m.genre_ids && m.genre_ids.length ? (GENRE_MAP[m.genre_ids[0]] || "Drama") : "Drama",
+          poster: m.poster_path || null,
+        }));
+      } catch (e) {
+        console.error("TMDB search error:", e);
+        return [];
+      }
+    }
 
     // ─── Poster Component ───────────────────────────────────────
     function Poster({ poster, title, className, style, size }) {
@@ -606,15 +629,41 @@
     function SearchBar({ onSelect, rankedIds }) {
       const [query, setQuery] = useState("");
       const [open, setOpen] = useState(false);
+      const [tmdbResults, setTmdbResults] = useState([]);
+      const [searching, setSearching] = useState(false);
       const containerRef = useRef(null);
+      const debounceRef = useRef(null);
 
-      const results = useMemo(() => {
+      // Local results (instant)
+      const localResults = useMemo(() => {
         if (!query.trim()) return [];
         const q = query.toLowerCase();
         return MOVIE_DB.filter(m =>
           m.title.toLowerCase().includes(q) || m.year.includes(q) || m.genre.toLowerCase().includes(q)
         ).slice(0, 10);
       }, [query]);
+
+      // TMDB live search (debounced)
+      useEffect(() => {
+        if (!TMDB_API_KEY || !query.trim() || query.trim().length < 2) {
+          setTmdbResults([]); setSearching(false); return;
+        }
+        setSearching(true);
+        clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(async () => {
+          const results = await searchTMDB(query.trim());
+          setTmdbResults(results);
+          setSearching(false);
+        }, 350);
+        return () => clearTimeout(debounceRef.current);
+      }, [query]);
+
+      // Merge: local first, then TMDB results not already in local
+      const results = useMemo(() => {
+        const localIds = new Set(localResults.map(m => m.id));
+        const extra = tmdbResults.filter(m => !localIds.has(m.id));
+        return [...localResults, ...extra].slice(0, 15);
+      }, [localResults, tmdbResults]);
 
       useEffect(() => { setOpen(results.length > 0 || query.trim().length > 0); }, [results, query]);
 
@@ -659,6 +708,7 @@
                   </div>
                 );
               })}
+              {searching && <div style={{textAlign:"center",padding:"10px",color:"var(--text-muted)",fontSize:"0.85rem"}}>Searching TMDB...</div>}
               {query.trim() && (
                 <div className="search-add-custom" onClick={handleAddCustom}>
                   <div className="search-add-icon">+</div>
