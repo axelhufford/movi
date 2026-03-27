@@ -1161,6 +1161,7 @@
               </div>
               <AuthBar user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} authLoading={authLoading} />
               <ProfileView uid={viewingUid} onBack={handleBackFromProfile} onAddMovie={handleSelectMovie} rankedIds={rankedIds} />
+              <ComparisonView session={session} onChoice={handleChoice} onCancel={() => setSession(null)} />
               <Toast message={toast} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
                 <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:"8px",color:"var(--text-muted)",textDecoration:"none",fontSize:"12px"}}>
