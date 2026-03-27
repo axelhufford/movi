@@ -306,12 +306,31 @@
     .score-high { background: rgba(76, 175, 80, 0.2); color: #66bb6a; }
     .score-mid { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
     .score-low { background: rgba(244, 67, 54, 0.2); color: #ef5350; }
+    .move-btns {
+      display: flex; flex-direction: column; gap: 1px; flex-shrink: 0;
+    }
+    .move-btn {
+      background: none; border: none; color: #555; cursor: pointer;
+      font-size: 0.7rem; padding: 2px 6px; transition: color 0.2s; border-radius: 4px;
+      line-height: 1;
+    }
+    .move-btn:hover { color: var(--gold); }
+    .move-btn:disabled { opacity: 0.15; cursor: default; }
     .remove-btn {
       background: none; border: none; color: #444; cursor: pointer;
       font-size: 1rem; padding: 4px 6px; transition: color 0.2s; border-radius: 6px;
       flex-shrink: 0;
     }
     .remove-btn:hover { color: var(--accent); }
+
+    /* Add from profile */
+    .profile-add-btn {
+      padding: 4px 10px; background: var(--accent); color: #fff; border: none;
+      border-radius: 6px; cursor: pointer; font-size: 0.7rem; font-weight: 600;
+      flex-shrink: 0; transition: all 0.2s; white-space: nowrap;
+    }
+    .profile-add-btn:hover { background: var(--accent-hover); }
+    .profile-add-btn:disabled { opacity: 0.4; cursor: default; background: #555; }
 
     /* Confirm */
     .confirm-overlay {
@@ -515,7 +534,7 @@
       return a;
     }
 
-    function Recommendations({ onSelect, rankedIds }) {
+    function Recommendations({ onSelect, rankedIds, rankedList }) {
       const categories = useMemo(() => {
         const popular = MOVIE_DB.filter(m => [278,155,13,550,27205,603,680,329,597,98,862,8587,12,105,76341,157336,872585,361743,545611,496243,475557,346698,693134,533535,402431,299534,299536,24428,1726,118340,284054,293660,263115,324857,634649,414906,109445,277834,354912,301528,10681,585,38,37799,106646,562,949,807,274,769,500,115,578,694,348,679,62,85,10193,14160,9806,2062,244786,1124,77,6977,24,73,7345,210577,335984,78,37165,68718,16869,424,424694,332562,419430,530915,374720,313369,157336].includes(m.id));
         const newReleases = MOVIE_DB.filter(m => parseInt(m.year) >= 2023);
@@ -523,15 +542,39 @@
         const horror = MOVIE_DB.filter(m => m.genre === "Horror");
         const animation = MOVIE_DB.filter(m => m.genre === "Animation");
         const comedy = MOVIE_DB.filter(m => m.genre === "Comedy" || m.genre === "Romance");
-        return [
+
+        // "Movies You May Like" — based on user's top-ranked genres and decades
+        let forYou = [];
+        if (rankedList && rankedList.length >= 3) {
+          const topHalf = rankedList.slice(0, Math.ceil(rankedList.length / 2));
+          const genreCounts = {};
+          const decadeCounts = {};
+          topHalf.forEach(m => {
+            if (m.genre) genreCounts[m.genre] = (genreCounts[m.genre] || 0) + 1;
+            const decade = Math.floor(parseInt(m.year) / 10) * 10;
+            if (decade) decadeCounts[decade] = (decadeCounts[decade] || 0) + 1;
+          });
+          const topGenres = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0]);
+          const topDecades = Object.entries(decadeCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => Number(e[0]));
+          const candidates = MOVIE_DB.filter(m =>
+            !rankedIds.has(m.id) &&
+            (topGenres.includes(m.genre) || topDecades.includes(Math.floor(parseInt(m.year) / 10) * 10))
+          );
+          forYou = shuffle(candidates).slice(0, 20);
+        }
+
+        const cats = [];
+        if (forYou.length > 0) cats.push({ title: "Movies You May Like", movies: forYou });
+        cats.push(
           { title: "Popular", movies: shuffle(popular).slice(0, 20) },
           { title: "New Releases", movies: shuffle(newReleases).slice(0, 20) },
           { title: "Horror", movies: shuffle(horror).slice(0, 15) },
           { title: "Animation", movies: shuffle(animation).slice(0, 15) },
           { title: "Comedies & Romance", movies: shuffle(comedy).slice(0, 15) },
           { title: "Classics", movies: shuffle(classics).slice(0, 15) },
-        ];
-      }, []);
+        );
+        return cats;
+      }, [rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map(m => m.id).join(",") : ""]);
 
       return (
         <div className="recs-section">
@@ -662,7 +705,7 @@
     }
 
     // ─── Ranked List (with optional read-only mode) ─────────────
-    function RankedList({ list, onRemove, onClear, onShare, readOnly, user }) {
+    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, rankedIds }) {
       const [confirmClear, setConfirmClear] = useState(false);
       const total = list.length;
 
@@ -717,7 +760,21 @@
                     <div className="ranked-item-year">{movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}</div>
                   </div>
                   <div className={`score-badge ${scoreClass(score)}`}>{score.toFixed(1)}</div>
+                  {!readOnly && (
+                    <div className="move-btns">
+                      <button className="move-btn" disabled={i === 0} onClick={() => onMove(i, i - 1)} title="Move up">&#x25B2;</button>
+                      <button className="move-btn" disabled={i === total - 1} onClick={() => onMove(i, i + 1)} title="Move down">&#x25BC;</button>
+                    </div>
+                  )}
                   {!readOnly && <button className="remove-btn" onClick={() => onRemove(movie.id)} title="Remove">&#x2715;</button>}
+                  {readOnly && onAddMovie && (
+                    <button className="profile-add-btn"
+                      disabled={rankedIds && rankedIds.has(movie.id)}
+                      onClick={(e) => { e.stopPropagation(); onAddMovie(movie); }}
+                      title="Add to your rankings">
+                      {rankedIds && rankedIds.has(movie.id) ? "Ranked" : "+ Add"}
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -811,7 +868,7 @@
     }
 
     // ─── Profile View (viewing someone else's rankings) ─────────
-    function ProfileView({ uid, onBack }) {
+    function ProfileView({ uid, onBack, onAddMovie, rankedIds }) {
       const [profile, setProfile] = useState(null);
       const [loading, setLoading] = useState(true);
 
@@ -848,7 +905,7 @@
             <div className="profile-count">{(profile.movies || []).length} movies ranked</div>
             <button className="profile-back" onClick={onBack}>&#x2190; Back</button>
           </div>
-          <RankedList list={profile.movies || []} readOnly={true} />
+          <RankedList list={profile.movies || []} readOnly={true} onAddMovie={onAddMovie} rankedIds={rankedIds} />
         </div>
       );
     }
@@ -1060,6 +1117,14 @@
 
       function handleRemove(id) { setRankedList(prev => prev.filter(m => m.id !== id)); }
       function handleClear() { setRankedList([]); }
+      function handleMove(fromIdx, toIdx) {
+        setRankedList(prev => {
+          const next = [...prev];
+          const [item] = next.splice(fromIdx, 1);
+          next.splice(toIdx, 0, item);
+          return next;
+        });
+      }
 
       function handleViewProfile(uid) {
         setViewingUid(uid);
@@ -1095,7 +1160,7 @@
                 <p>Movie rankings</p>
               </div>
               <AuthBar user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} authLoading={authLoading} />
-              <ProfileView uid={viewingUid} onBack={handleBackFromProfile} />
+              <ProfileView uid={viewingUid} onBack={handleBackFromProfile} onAddMovie={handleSelectMovie} rankedIds={rankedIds} />
               <Toast message={toast} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
                 <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:"8px",color:"var(--text-muted)",textDecoration:"none",fontSize:"12px"}}>
@@ -1139,9 +1204,9 @@
           {tab === "rank" && (
             <>
               <SearchBar onSelect={handleSelectMovie} rankedIds={rankedIds} />
-              <Recommendations onSelect={handleSelectMovie} rankedIds={rankedIds} />
+              <Recommendations onSelect={handleSelectMovie} rankedIds={rankedIds} rankedList={rankedList} />
               <RankedList list={rankedList} onRemove={handleRemove} onClear={handleClear}
-                onShare={handleShare} user={user} />
+                onMove={handleMove} onShare={handleShare} user={user} />
             </>
           )}
 
