@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d0d0d"/>
+      <stop offset="100%" style="stop-color:#1a1a2e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Film strip decoration left -->
+  <g opacity="0.08">
+    <rect x="40" y="0" width="80" height="630" rx="4" fill="#fff"/>
+    <rect x="48" y="15" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="45" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="75" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="105" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="135" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="165" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="195" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="225" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="255" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="285" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="315" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="345" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="375" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="405" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="435" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="465" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="495" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="525" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="555" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="48" y="585" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="15" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="45" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="75" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="105" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="135" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="165" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="195" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="225" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="255" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="285" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="315" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="345" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="375" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="405" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="435" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="465" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="495" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="525" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="555" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="88" y="585" width="24" height="16" rx="2" fill="#0d0d0d"/>
+  </g>
+
+  <!-- Film strip decoration right -->
+  <g opacity="0.08">
+    <rect x="1080" y="0" width="80" height="630" rx="4" fill="#fff"/>
+    <rect x="1088" y="15" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="45" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="75" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="105" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="135" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="165" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="195" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="225" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="255" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="285" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="315" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="345" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="375" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="405" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="435" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="465" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="495" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="525" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="555" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1088" y="585" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="15" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="45" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="75" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="105" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="135" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="165" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="195" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="225" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="255" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="285" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="315" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="345" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="375" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="405" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="435" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="465" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="495" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="525" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="555" width="24" height="16" rx="2" fill="#0d0d0d"/>
+    <rect x="1128" y="585" width="24" height="16" rx="2" fill="#0d0d0d"/>
+  </g>
+
+  <!-- Clapperboard icon -->
+  <g transform="translate(440, 180)">
+    <!-- Board body -->
+    <rect x="0" y="30" width="100" height="70" rx="6" fill="#eee"/>
+    <!-- Clapper top -->
+    <polygon points="0,30 100,30 95,0 5,0" fill="#333"/>
+    <!-- Clapper stripes -->
+    <polygon points="12,0 22,0 28,30 18,30" fill="#eee"/>
+    <polygon points="35,0 45,0 51,30 41,30" fill="#eee"/>
+    <polygon points="58,0 68,0 74,30 64,30" fill="#eee"/>
+    <polygon points="81,0 91,0 95,30 87,30" fill="#eee"/>
+  </g>
+
+  <!-- "Movi" text -->
+  <text x="560" y="280" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="120" font-weight="800" letter-spacing="-3">
+    <tspan fill="#eeeeee">Mo</tspan><tspan fill="#e94560">vi</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="600" y="340" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="28" fill="#999" text-anchor="middle">
+    Rank movies &amp; TV shows head-to-head
+  </text>
+
+  <!-- Subtitle -->
+  <text x="600" y="385" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" fill="#666" text-anchor="middle">
+    No star ratings — just your preferences
+  </text>
+
+  <!-- Decorative accent line -->
+  <rect x="480" y="410" width="240" height="3" rx="2" fill="#e94560" opacity="0.6"/>
+</svg>
