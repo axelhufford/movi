@@ -74,6 +74,52 @@
       background: #333; color: var(--text-muted); font-size: 0.75rem; padding: 6px 12px;
     }
     .auth-btn-signout:hover { background: #444; color: var(--text); }
+    .auth-btn-email {
+      background: #fff; color: #333;
+    }
+    .auth-btn-email:hover { background: #e0e0e0; }
+    .auth-divider {
+      display: flex; align-items: center; gap: 12px; margin: 10px 0;
+      color: var(--text-muted); font-size: 0.8rem;
+    }
+    .auth-divider::before, .auth-divider::after {
+      content: ""; flex: 1; height: 1px; background: #333;
+    }
+    .auth-form {
+      background: var(--surface); border-radius: var(--radius); padding: 24px;
+      margin-bottom: 16px; max-width: 360px; margin-left: auto; margin-right: auto;
+    }
+    .auth-form h3 { text-align: center; margin-bottom: 16px; font-size: 1.1rem; }
+    .auth-input {
+      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #333;
+      background: #111; color: var(--text); font-size: 0.9rem; margin-bottom: 10px;
+      outline: none; transition: border-color 0.2s;
+    }
+    .auth-input:focus { border-color: var(--accent); }
+    .auth-input::placeholder { color: #666; }
+    .auth-error {
+      color: #ff4444; font-size: 0.8rem; margin-bottom: 10px; text-align: center;
+    }
+    .auth-link {
+      color: var(--accent); cursor: pointer; font-size: 0.8rem;
+      background: none; border: none; text-decoration: underline;
+    }
+    .auth-link:hover { color: var(--accent-hover); }
+    .auth-form-footer {
+      text-align: center; margin-top: 12px; font-size: 0.8rem; color: var(--text-muted);
+    }
+    .auth-form-submit {
+      width: 100%; padding: 10px; border-radius: 8px; border: none; cursor: pointer;
+      font-weight: 600; font-size: 0.9rem; background: var(--accent); color: #fff;
+      transition: background 0.2s; margin-top: 4px;
+    }
+    .auth-form-submit:hover { background: var(--accent-hover); }
+    .auth-back {
+      display: block; text-align: center; margin-bottom: 12px;
+      color: var(--text-muted); font-size: 0.8rem; cursor: pointer;
+      background: none; border: none;
+    }
+    .auth-back:hover { color: var(--text); }
     .auth-sync {
       font-size: 0.7rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px;
     }
@@ -1085,7 +1131,9 @@
     }
 
     // ─── Auth Bar ───────────────────────────────────────────────
-    function AuthBar({ user, onSignIn, onSignOut, authLoading }) {
+    function AuthBar({ user, onSignIn, onSignOut, authLoading, authMode, setAuthMode,
+      authEmail, setAuthEmail, authPassword, setAuthPassword, authDisplayName, setAuthDisplayName,
+      authError, onEmailSignIn, onEmailSignUp }) {
       if (!FIREBASE_READY) return null;
 
       if (authLoading) {
@@ -1096,11 +1144,57 @@
         );
       }
 
+      if (!user && authMode === "signin") {
+        return (
+          <div className="auth-form">
+            <button className="auth-back" onClick={() => setAuthMode(null)}>&larr; Back</button>
+            <h3>Sign In</h3>
+            {authError && <div className="auth-error">{authError}</div>}
+            <input className="auth-input" type="email" placeholder="Email" value={authEmail}
+              onChange={e => setAuthEmail(e.target.value)} />
+            <input className="auth-input" type="password" placeholder="Password" value={authPassword}
+              onChange={e => setAuthPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && onEmailSignIn()} />
+            <button className="auth-form-submit" onClick={onEmailSignIn}>Sign In</button>
+            <div className="auth-form-footer">
+              Don't have an account?{" "}
+              <button className="auth-link" onClick={() => setAuthMode("signup")}>Sign up</button>
+            </div>
+          </div>
+        );
+      }
+
+      if (!user && authMode === "signup") {
+        return (
+          <div className="auth-form">
+            <button className="auth-back" onClick={() => setAuthMode(null)}>&larr; Back</button>
+            <h3>Create Account</h3>
+            {authError && <div className="auth-error">{authError}</div>}
+            <input className="auth-input" type="text" placeholder="Display Name" value={authDisplayName}
+              onChange={e => setAuthDisplayName(e.target.value)} />
+            <input className="auth-input" type="email" placeholder="Email" value={authEmail}
+              onChange={e => setAuthEmail(e.target.value)} />
+            <input className="auth-input" type="password" placeholder="Password (min. 6 characters)" value={authPassword}
+              onChange={e => setAuthPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && onEmailSignUp()} />
+            <button className="auth-form-submit" onClick={onEmailSignUp}>Create Account</button>
+            <div className="auth-form-footer">
+              Already have an account?{" "}
+              <button className="auth-link" onClick={() => setAuthMode("signin")}>Sign in</button>
+            </div>
+          </div>
+        );
+      }
+
       if (!user) {
         return (
-          <div className="auth-bar">
+          <div className="auth-bar" style={{flexDirection: "column", alignItems: "stretch", gap: "8px"}}>
             <button className="auth-btn auth-btn-signin" onClick={onSignIn}>
               Sign in with Google
+            </button>
+            <div className="auth-divider">or</div>
+            <button className="auth-btn auth-btn-email" onClick={() => setAuthMode("signin")}>
+              Sign in with Email
             </button>
           </div>
         );
@@ -1146,6 +1240,11 @@
       const [toast, setToast] = useState("");
       const [user, setUser] = useState(null);
       const [authLoading, setAuthLoading] = useState(FIREBASE_READY);
+      const [authMode, setAuthMode] = useState(null); // null, "signin", "signup"
+      const [authEmail, setAuthEmail] = useState("");
+      const [authPassword, setAuthPassword] = useState("");
+      const [authDisplayName, setAuthDisplayName] = useState("");
+      const [authError, setAuthError] = useState("");
       const [tab, setTab] = useState("rank"); // "rank", "community"
       const [viewingUid, setViewingUid] = useState(null);
       const saveTimerRef = useRef(null);
@@ -1266,6 +1365,60 @@
         showToast("Signed out.");
       }
 
+      function getAuthErrorMessage(code) {
+        const msgs = {
+          "auth/email-already-in-use": "An account with this email already exists.",
+          "auth/weak-password": "Password must be at least 6 characters.",
+          "auth/invalid-email": "Please enter a valid email address.",
+          "auth/user-not-found": "No account found with this email.",
+          "auth/wrong-password": "Incorrect password.",
+          "auth/invalid-credential": "Incorrect email or password.",
+          "auth/too-many-requests": "Too many attempts. Please try again later.",
+        };
+        return msgs[code] || "Something went wrong. Please try again.";
+      }
+
+      async function handleEmailSignIn() {
+        if (!auth) return;
+        setAuthError("");
+        if (!authEmail || !authPassword) {
+          setAuthError("Please enter both email and password.");
+          return;
+        }
+        try {
+          await auth.signInWithEmailAndPassword(authEmail, authPassword);
+          setAuthMode(null);
+          setAuthEmail(""); setAuthPassword("");
+          showToast("Signed in! Your rankings will sync to the cloud.");
+        } catch (e) {
+          setAuthError(getAuthErrorMessage(e.code));
+        }
+      }
+
+      async function handleEmailSignUp() {
+        if (!auth) return;
+        setAuthError("");
+        if (!authDisplayName.trim()) {
+          setAuthError("Please enter a display name.");
+          return;
+        }
+        if (!authEmail || !authPassword) {
+          setAuthError("Please enter both email and password.");
+          return;
+        }
+        try {
+          const cred = await auth.createUserWithEmailAndPassword(authEmail, authPassword);
+          await cred.user.updateProfile({ displayName: authDisplayName.trim() });
+          // Force refresh so displayName is available immediately
+          setUser({...cred.user, displayName: authDisplayName.trim()});
+          setAuthMode(null);
+          setAuthEmail(""); setAuthPassword(""); setAuthDisplayName("");
+          showToast("Account created! Your rankings will sync to the cloud.");
+        } catch (e) {
+          setAuthError(getAuthErrorMessage(e.code));
+        }
+      }
+
       function handleShare() {
         if (!user) {
           showToast("Sign in to share your rankings!");
@@ -1362,7 +1515,12 @@
                 <h1 onClick={handleGoHome}>&#x1F3AC; Mo<span>vi</span></h1>
                 <p>{isTV ? "TV show" : "Movie"} rankings</p>
               </div>
-              <AuthBar user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} authLoading={authLoading} />
+              <AuthBar user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} authLoading={authLoading}
+                authMode={authMode} setAuthMode={setAuthMode}
+                authEmail={authEmail} setAuthEmail={setAuthEmail}
+                authPassword={authPassword} setAuthPassword={setAuthPassword}
+                authDisplayName={authDisplayName} setAuthDisplayName={setAuthDisplayName}
+                authError={authError} onEmailSignIn={handleEmailSignIn} onEmailSignUp={handleEmailSignUp} />
               <ProfileView uid={viewingUid} onBack={handleBackFromProfile} onAddMovie={handleSelectMovie}
                 rankedIds={rankedIds} tvRankedIds={tvRankedIds} defaultTab={isTV ? "tv" : "movies"} />
               <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
@@ -1395,13 +1553,22 @@
             </button>
           </div>
 
-          <AuthBar user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} authLoading={authLoading} />
+          <AuthBar user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} authLoading={authLoading}
+                authMode={authMode} setAuthMode={setAuthMode}
+                authEmail={authEmail} setAuthEmail={setAuthEmail}
+                authPassword={authPassword} setAuthPassword={setAuthPassword}
+                authDisplayName={authDisplayName} setAuthDisplayName={setAuthDisplayName}
+                authError={authError} onEmailSignIn={handleEmailSignIn} onEmailSignUp={handleEmailSignUp} />
 
-          {FIREBASE_READY && !user && !authLoading && activeList.length > 0 && (
+          {FIREBASE_READY && !user && !authLoading && !authMode && activeList.length > 0 && (
             <div className="signin-prompt">
               <p>Sign in to save your rankings to the cloud and share them with friends.</p>
               <button className="auth-btn auth-btn-signin" onClick={handleSignIn}>
                 Sign in with Google
+              </button>
+              <div className="auth-divider" style={{margin:"8px 0"}}>or</div>
+              <button className="auth-btn auth-btn-email" onClick={() => setAuthMode("signin")}>
+                Sign in with Email
               </button>
             </div>
           )}
