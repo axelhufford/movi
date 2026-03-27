@@ -381,6 +381,48 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Mode Toggle */
+    .mode-toggle {
+      display: flex; gap: 4px; justify-content: center; margin-bottom: 12px;
+    }
+    .mode-btn {
+      padding: 8px 20px; border: 2px solid #333; background: none;
+      color: var(--text-muted); border-radius: 20px; cursor: pointer;
+      font-weight: 600; font-size: 0.9rem; transition: all 0.2s;
+    }
+    .mode-btn.active {
+      border-color: var(--accent); color: var(--accent); background: rgba(233, 69, 96, 0.1);
+    }
+    .mode-btn:not(.active):hover { border-color: #555; color: var(--text); }
+
+    /* TV Mode Theme (Dartmouth Green) */
+    .tv-mode {
+      --accent: #00693E;
+      --accent-hover: #00894E;
+      --bg: #0a1a12;
+      --surface: #112218;
+      --surface2: #0d2e1a;
+    }
+    .tv-mode .mode-btn.active {
+      background: rgba(0, 105, 62, 0.15);
+    }
+    .tv-mode .search-item:hover { background: rgba(0, 105, 62, 0.15); }
+    .tv-mode .search-add-custom:hover { background: rgba(0, 105, 62, 0.15); }
+    .tv-mode .score-high { background: rgba(0, 105, 62, 0.25); color: #4caf50; }
+
+    /* Profile sub-toggle for movies/tv */
+    .profile-subtabs {
+      display: flex; gap: 4px; justify-content: center; margin: 12px 0;
+    }
+    .profile-subtab {
+      padding: 6px 16px; border: 1px solid #444; background: none;
+      color: var(--text-muted); border-radius: 16px; cursor: pointer;
+      font-size: 0.8rem; font-weight: 600; transition: all 0.2s;
+    }
+    .profile-subtab.active {
+      border-color: var(--accent); color: var(--accent); background: rgba(233, 69, 96, 0.1);
+    }
+
     @media (max-width: 600px) {
       .comparison-cards { gap: 10px; }
       .comparison-box { padding: 20px 14px; }
@@ -390,6 +432,7 @@
       .rec-card img, .rec-card .poster-placeholder { width: 95px; height: 142px; }
       .nav-tabs { gap: 2px; }
       .nav-tab { padding: 8px 10px; font-size: 0.8rem; }
+      .mode-btn { padding: 6px 14px; font-size: 0.8rem; }
     }
   </style>
 </head>
@@ -405,6 +448,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="movies.js"></script>
+  <script src="tvshows.js"></script>
   <script src="firebase-config.js"></script>
 
   <script type="text/babel">
@@ -430,12 +474,39 @@
     const TMDB_SEARCH_URL = "https://api.themoviedb.org/3/search/movie";
 
     const GENRE_MAP = {28:"Action",12:"Adventure",16:"Animation",35:"Comedy",80:"Crime",99:"Documentary",18:"Drama",10751:"Family",14:"Fantasy",36:"History",27:"Horror",10402:"Music",9648:"Mystery",10749:"Romance",878:"Sci-Fi",10770:"TV Movie",53:"Thriller",10752:"War",37:"Western"};
+    const TV_GENRE_MAP = {10759:"Action & Adventure",16:"Animation",35:"Comedy",80:"Crime",99:"Documentary",18:"Drama",10751:"Family",10762:"Kids",9648:"Mystery",10763:"News",10764:"Reality",10765:"Sci-Fi & Fantasy",10766:"Soap",10767:"Talk",10768:"War & Politics",37:"Western"};
 
     const seen = new Set();
     const MOVIE_DB = MOVIE_DATA
       .map(([id, title, year, genre, poster]) => ({ id, title, year: String(year), genre, poster }))
       .filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
     const MOVIE_DB_IDS = new Set(MOVIE_DB.map(m => m.id));
+
+    const tvSeen = new Set();
+    const TV_DB = (typeof TV_DATA !== "undefined" ? TV_DATA : [])
+      .map(([id, title, year, genre, poster]) => ({ id, title, year: String(year), genre, poster }))
+      .filter(m => { if (tvSeen.has(m.id)) return false; tvSeen.add(m.id); return true; });
+    const TV_DB_IDS = new Set(TV_DB.map(m => m.id));
+
+    const TMDB_TV_SEARCH_URL = "https://api.themoviedb.org/3/search/tv";
+
+    async function searchTMDBTV(query) {
+      try {
+        const resp = await fetch(`${TMDB_TV_SEARCH_URL}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&language=en-US&page=1`);
+        if (!resp.ok) return [];
+        const data = await resp.json();
+        return (data.results || []).map(s => ({
+          id: s.id,
+          title: s.name,
+          year: s.first_air_date ? s.first_air_date.slice(0, 4) : "",
+          genre: s.genre_ids && s.genre_ids.length ? (TV_GENRE_MAP[s.genre_ids[0]] || "Drama") : "Drama",
+          poster: s.poster_path || null,
+        }));
+      } catch (e) {
+        console.error("TMDB TV search error:", e);
+        return [];
+      }
+    }
 
     async function searchTMDB(query) {
       try {
@@ -506,14 +577,17 @@
     }
 
     // ─── Firestore Helpers ──────────────────────────────────────
-    async function saveProfile(user, rankedList) {
+    async function saveProfile(user, rankedList, tvRankedList) {
       if (!db || !user) return;
       try {
+        const toSave = m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster });
         await db.collection("profiles").doc(user.uid).set({
           displayName: user.displayName || "Anonymous",
           photoURL: user.photoURL || null,
-          movies: rankedList.map(m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster })),
+          movies: rankedList.map(toSave),
           movieCount: rankedList.length,
+          tvShows: tvRankedList.map(toSave),
+          tvShowCount: tvRankedList.length,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
       } catch (e) {
@@ -536,11 +610,11 @@
       if (!db) return [];
       try {
         const snap = await db.collection("profiles")
-          .where("movieCount", ">", 0)
-          .orderBy("movieCount", "desc")
+          .orderBy("updatedAt", "desc")
           .limit(50)
           .get();
-        return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+        return snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+          .filter(p => (p.movieCount || 0) > 0 || (p.tvShowCount || 0) > 0);
       } catch (e) {
         console.error("Failed to load community:", e);
         return [];
@@ -557,16 +631,30 @@
       return a;
     }
 
-    function Recommendations({ onSelect, rankedIds, rankedList }) {
-      const categories = useMemo(() => {
-        const popular = MOVIE_DB.filter(m => [278,155,13,550,27205,603,680,329,597,98,862,8587,12,105,76341,157336,872585,361743,545611,496243,475557,346698,693134,533535,402431,299534,299536,24428,1726,118340,284054,293660,263115,324857,634649,414906,109445,277834,354912,301528,10681,585,38,37799,106646,562,949,807,274,769,500,115,578,694,348,679,62,85,10193,14160,9806,2062,244786,1124,77,6977,24,73,7345,210577,335984,78,37165,68718,16869,424,424694,332562,419430,530915,374720,313369,157336].includes(m.id));
-        const newReleases = MOVIE_DB.filter(m => parseInt(m.year) >= 2023);
-        const classics = MOVIE_DB.filter(m => parseInt(m.year) <= 1990);
-        const horror = MOVIE_DB.filter(m => m.genre === "Horror");
-        const animation = MOVIE_DB.filter(m => m.genre === "Animation");
-        const comedy = MOVIE_DB.filter(m => m.genre === "Comedy" || m.genre === "Romance");
+    const POPULAR_MOVIE_IDS = [278,155,13,550,27205,603,680,329,597,98,862,8587,12,105,76341,157336,872585,361743,545611,496243,475557,346698,693134,533535,402431,299534,299536,24428,1726,118340,284054,293660,263115,324857,634649,414906,109445,277834,354912,301528,10681,585,38,37799,106646,562,949,807,274,769,500,115,578,694,348,679,62,85,10193,14160,9806,2062,244786,1124,77,6977,24,73,7345,210577,335984,78,37165,68718,16869,424,424694,332562,419430,530915,374720,313369];
+    const POPULAR_TV_IDS = [1396,1399,66732,1418,60735,456,1402,1668,63174,71446,82856,76479,1100,95557,84958,2316,94997,93405,60574,62560,87108,85552,100088,114472,71712,44217,1405,63926,31917,67744,69478,32726,4614,1434,2190,1622,246,84773,1395,1104,2382,72879,61889,96677,2734,61175,4607,68507,75006,71789];
 
-        // "Movies You May Like" — based on user's top-ranked genres and decades
+    function Recommendations({ onSelect, rankedIds, rankedList, localDb, mode }) {
+      const isTV = mode === "tv";
+      const categories = useMemo(() => {
+        const db = localDb;
+        const popularIds = isTV ? POPULAR_TV_IDS : POPULAR_MOVIE_IDS;
+        const popularIdSet = new Set(popularIds);
+        const popular = db.filter(m => popularIdSet.has(m.id));
+        const newReleases = db.filter(m => parseInt(m.year) >= 2023);
+        const classicYear = isTV ? 2005 : 1990;
+        const classics = db.filter(m => parseInt(m.year) <= classicYear);
+
+        const genre1 = isTV ? "Drama" : "Horror";
+        const genre2 = isTV ? "Comedy" : "Animation";
+        const genre3Label = isTV ? "Sci-Fi & Fantasy" : "Comedies & Romance";
+        const cat1 = db.filter(m => m.genre === genre1);
+        const cat2 = db.filter(m => m.genre === genre2);
+        const cat3 = isTV
+          ? db.filter(m => m.genre === "Sci-Fi & Fantasy")
+          : db.filter(m => m.genre === "Comedy" || m.genre === "Romance");
+
+        // "For You" — based on user's top-ranked genres and decades
         let forYou = [];
         if (rankedList && rankedList.length >= 3) {
           const topHalf = rankedList.slice(0, Math.ceil(rankedList.length / 2));
@@ -579,25 +667,26 @@
           });
           const topGenres = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0]);
           const topDecades = Object.entries(decadeCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => Number(e[0]));
-          const candidates = MOVIE_DB.filter(m =>
+          const candidates = db.filter(m =>
             !rankedIds.has(m.id) &&
             (topGenres.includes(m.genre) || topDecades.includes(Math.floor(parseInt(m.year) / 10) * 10))
           );
           forYou = shuffle(candidates).slice(0, 20);
         }
 
+        const forYouTitle = isTV ? "Shows You May Like" : "Movies You May Like";
         const cats = [];
-        if (forYou.length > 0) cats.push({ title: "Movies You May Like", movies: forYou });
+        if (forYou.length > 0) cats.push({ title: forYouTitle, movies: forYou });
         cats.push(
           { title: "Popular", movies: shuffle(popular).slice(0, 20) },
           { title: "New Releases", movies: shuffle(newReleases).slice(0, 20) },
-          { title: "Horror", movies: shuffle(horror).slice(0, 15) },
-          { title: "Animation", movies: shuffle(animation).slice(0, 15) },
-          { title: "Comedies & Romance", movies: shuffle(comedy).slice(0, 15) },
+          { title: genre1, movies: shuffle(cat1).slice(0, 15) },
+          { title: genre2, movies: shuffle(cat2).slice(0, 15) },
+          { title: genre3Label, movies: shuffle(cat3).slice(0, 15) },
           { title: "Classics", movies: shuffle(classics).slice(0, 15) },
         );
         return cats;
-      }, [rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map(m => m.id).join(",") : ""]);
+      }, [localDb, isTV, rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map(m => m.id).join(",") : ""]);
 
       return (
         <div className="recs-section">
@@ -626,7 +715,7 @@
     }
 
     // ─── Search Bar ─────────────────────────────────────────────
-    function SearchBar({ onSelect, rankedIds }) {
+    function SearchBar({ onSelect, rankedIds, localDb, searchFn, placeholder, customLabel }) {
       const [query, setQuery] = useState("");
       const [open, setOpen] = useState(false);
       const [tmdbResults, setTmdbResults] = useState([]);
@@ -638,12 +727,13 @@
       const localResults = useMemo(() => {
         if (!query.trim()) return [];
         const q = query.toLowerCase();
-        return MOVIE_DB.filter(m =>
+        return (localDb || MOVIE_DB).filter(m =>
           m.title.toLowerCase().includes(q) || m.year.includes(q) || m.genre.toLowerCase().includes(q)
         ).slice(0, 10);
-      }, [query]);
+      }, [query, localDb]);
 
       // TMDB live search (debounced)
+      const activeFn = searchFn || searchTMDB;
       useEffect(() => {
         if (!TMDB_API_KEY || !query.trim() || query.trim().length < 2) {
           setTmdbResults([]); setSearching(false); return;
@@ -651,7 +741,7 @@
         setSearching(true);
         clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(async () => {
-          const results = await searchTMDB(query.trim());
+          const results = await activeFn(query.trim());
           setTmdbResults(results);
           setSearching(false);
         }, 350);
@@ -689,7 +779,7 @@
 
       return (
         <div className="search-section" ref={containerRef}>
-          <input className="search-input" type="text" placeholder="Search for a movie to rank..."
+          <input className="search-input" type="text" placeholder={placeholder || "Search for a movie to rank..."}
             value={query} onChange={e => setQuery(e.target.value)}
             onFocus={() => query.trim() && setOpen(true)} />
           {open && (
@@ -712,7 +802,7 @@
               {query.trim() && (
                 <div className="search-add-custom" onClick={handleAddCustom}>
                   <div className="search-add-icon">+</div>
-                  <div>Add "{query.trim()}" as custom movie</div>
+                  <div>Add "{query.trim()}" as custom {customLabel || "movie"}</div>
                 </div>
               )}
             </div>
@@ -722,7 +812,7 @@
     }
 
     // ─── Comparison View ────────────────────────────────────────
-    function ComparisonView({ session, onChoice, onCancel }) {
+    function ComparisonView({ session, onChoice, onCancel, itemLabel }) {
       if (!session || session.done) return null;
       const { newMovie, compareMovie, step, maxSteps } = session;
 
@@ -742,7 +832,7 @@
       return (
         <div className="comparison-overlay">
           <div className="comparison-box">
-            <div className="comparison-title">Which movie do you prefer?</div>
+            <div className="comparison-title">Which {itemLabel || "movie"} do you prefer?</div>
             <div className="comparison-progress">Comparison {step + 1} of ~{Math.max(maxSteps, 1)}</div>
             <div className="comparison-cards">
               <Card movie={newMovie} onClick={() => onChoice(true)} />
@@ -755,7 +845,7 @@
     }
 
     // ─── Ranked List (with optional read-only mode) ─────────────
-    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, rankedIds }) {
+    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, rankedIds, itemLabel }) {
       const [confirmClear, setConfirmClear] = useState(false);
       const total = list.length;
 
@@ -764,8 +854,8 @@
           <div className="ranked-section">
             <h2 style={{ marginBottom: 16 }}>Your Rankings</h2>
             <div className="ranked-empty">
-              <p>🎬</p>
-              <p>Search or pick a movie above to start ranking!</p>
+              <p>{itemLabel === "TV show" ? "\uD83D\uDCFA" : "\uD83C\uDFAC"}</p>
+              <p>Search or pick a {itemLabel || "movie"} above to start ranking!</p>
             </div>
           </div>
         );
@@ -775,8 +865,8 @@
         return (
           <div className="ranked-section">
             <div className="ranked-empty">
-              <p>🎬</p>
-              <p>No movies ranked yet.</p>
+              <p>{itemLabel === "TV show" ? "\uD83D\uDCFA" : "\uD83C\uDFAC"}</p>
+              <p>No {itemLabel || "movie"}s ranked yet.</p>
             </div>
           </div>
         );
@@ -832,7 +922,7 @@
           {confirmClear && (
             <div className="confirm-overlay">
               <div className="confirm-box">
-                <p>Remove all {total} movies from your rankings?</p>
+                <p>Remove all {total} {itemLabel || "movie"}s from your rankings?</p>
                 <div className="confirm-btns">
                   <button className="confirm-yes" onClick={() => { onClear(); setConfirmClear(false); }}>Yes, Clear All</button>
                   <button className="confirm-no" onClick={() => setConfirmClear(false)}>Cancel</button>
@@ -899,7 +989,13 @@
                 }
                 <div className="community-card-info">
                   <div className="community-card-name">{p.displayName || "Anonymous"}</div>
-                  <div className="community-card-meta">{p.movieCount || 0} movies ranked</div>
+                  <div className="community-card-meta">
+                    {(p.movieCount || 0) > 0 && `${p.movieCount} movies`}
+                    {(p.movieCount || 0) > 0 && (p.tvShowCount || 0) > 0 && " · "}
+                    {(p.tvShowCount || 0) > 0 && `${p.tvShowCount} shows`}
+                    {(p.movieCount || 0) === 0 && (p.tvShowCount || 0) === 0 && "No rankings yet"}
+                    {" ranked"}
+                  </div>
                   {p.movies && p.movies.length > 0 && (
                     <div className="community-card-top">
                       {p.movies.slice(0, 5).map(m => (
@@ -918,9 +1014,10 @@
     }
 
     // ─── Profile View (viewing someone else's rankings) ─────────
-    function ProfileView({ uid, onBack, onAddMovie, rankedIds }) {
+    function ProfileView({ uid, onBack, onAddMovie, rankedIds, tvRankedIds, defaultTab }) {
       const [profile, setProfile] = useState(null);
       const [loading, setLoading] = useState(true);
+      const [profileTab, setProfileTab] = useState(defaultTab || "movies");
 
       useEffect(() => {
         loadProfile(uid).then(p => { setProfile(p); setLoading(false); });
@@ -944,6 +1041,11 @@
         );
       }
 
+      const movieList = profile.movies || [];
+      const tvList = profile.tvShows || [];
+      const activeList = profileTab === "movies" ? movieList : tvList;
+      const activeIds = profileTab === "movies" ? rankedIds : tvRankedIds;
+
       return (
         <div>
           <div className="profile-banner">
@@ -952,10 +1054,22 @@
               : <div className="profile-avatar-ph">{(profile.displayName || "?")[0]}</div>
             }
             <div className="profile-name">{profile.displayName || "Anonymous"}</div>
-            <div className="profile-count">{(profile.movies || []).length} movies ranked</div>
+            <div className="profile-count">
+              {movieList.length > 0 && `${movieList.length} movies`}
+              {movieList.length > 0 && tvList.length > 0 && " · "}
+              {tvList.length > 0 && `${tvList.length} shows`}
+              {" ranked"}
+            </div>
+            <div className="profile-subtabs">
+              <button className={`profile-subtab ${profileTab === "movies" ? "active" : ""}`}
+                onClick={() => setProfileTab("movies")}>Movies ({movieList.length})</button>
+              <button className={`profile-subtab ${profileTab === "tv" ? "active" : ""}`}
+                onClick={() => setProfileTab("tv")}>TV Shows ({tvList.length})</button>
+            </div>
             <button className="profile-back" onClick={onBack}>&#x2190; Back</button>
           </div>
-          <RankedList list={profile.movies || []} readOnly={true} onAddMovie={onAddMovie} rankedIds={rankedIds} />
+          <RankedList list={activeList} readOnly={true} onAddMovie={onAddMovie} rankedIds={activeIds}
+            itemLabel={profileTab === "tv" ? "TV show" : "movie"} />
         </div>
       );
     }
@@ -1007,10 +1121,18 @@
 
     // ─── App ────────────────────────────────────────────────────
     function App() {
+      const [mode, setMode] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get("type") === "tv" ? "tv" : "movies";
+      });
       const [rankedList, setRankedList] = useState(() => {
         try { return JSON.parse(localStorage.getItem("movi-ranked-list")) || []; } catch { return []; }
       });
+      const [tvRankedList, setTvRankedList] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("movi-tv-ranked-list")) || []; } catch { return []; }
+      });
       const [session, setSession] = useState(null);
+      const [tvSession, setTvSession] = useState(null);
       const [toast, setToast] = useState("");
       const [user, setUser] = useState(null);
       const [authLoading, setAuthLoading] = useState(FIREBASE_READY);
@@ -1018,7 +1140,19 @@
       const [viewingUid, setViewingUid] = useState(null);
       const saveTimerRef = useRef(null);
 
+      const isTV = mode === "tv";
+      const activeList = isTV ? tvRankedList : rankedList;
+      const setActiveList = isTV ? setTvRankedList : setRankedList;
+      const activeSession = isTV ? tvSession : session;
+      const setActiveSession = isTV ? setTvSession : setSession;
       const rankedIds = new Set(rankedList.map(m => m.id));
+      const tvRankedIds = new Set(tvRankedList.map(m => m.id));
+      const activeIds = isTV ? tvRankedIds : rankedIds;
+
+      // Apply TV mode to body for background color
+      useEffect(() => {
+        document.body.style.background = isTV ? "#0a1a12" : "#0d0d0d";
+      }, [isTV]);
 
       // Check URL for shared profile
       useEffect(() => {
@@ -1027,6 +1161,7 @@
         if (sharedUid && FIREBASE_READY) {
           setViewingUid(sharedUid);
         }
+        if (params.get("type") === "tv") setMode("tv");
       }, []);
 
       // Firebase auth listener
@@ -1036,25 +1171,29 @@
           setUser(firebaseUser);
           setAuthLoading(false);
           if (firebaseUser) {
-            // Load cloud rankings
             const profile = await loadProfile(firebaseUser.uid);
-            if (profile && profile.movies && profile.movies.length > 0) {
-              const localList = JSON.parse(localStorage.getItem("movi-ranked-list") || "[]");
-              // If cloud has data and local is empty, use cloud data
-              if (localList.length === 0) {
-                setRankedList(profile.movies);
-              } else if (profile.movieCount > localList.length) {
-                // If cloud has more movies, use cloud
-                setRankedList(profile.movies);
+            if (profile) {
+              // Sync movies
+              if (profile.movies && profile.movies.length > 0) {
+                const localList = JSON.parse(localStorage.getItem("movi-ranked-list") || "[]");
+                if (localList.length === 0 || profile.movieCount > localList.length) {
+                  setRankedList(profile.movies);
+                }
               }
-              // Otherwise keep local (user may have ranked while offline)
+              // Sync TV shows
+              if (profile.tvShows && profile.tvShows.length > 0) {
+                const localTvList = JSON.parse(localStorage.getItem("movi-tv-ranked-list") || "[]");
+                if (localTvList.length === 0 || profile.tvShowCount > localTvList.length) {
+                  setTvRankedList(profile.tvShows);
+                }
+              }
             }
           }
         });
         return () => unsub();
       }, []);
 
-      // Handle redirect result (for browsers that used signInWithRedirect)
+      // Handle redirect result
       useEffect(() => {
         if (!auth) return;
         auth.getRedirectResult().then(result => {
@@ -1068,16 +1207,19 @@
       useEffect(() => {
         localStorage.setItem("movi-ranked-list", JSON.stringify(rankedList));
       }, [rankedList]);
+      useEffect(() => {
+        localStorage.setItem("movi-tv-ranked-list", JSON.stringify(tvRankedList));
+      }, [tvRankedList]);
 
-      // Debounced save to Firestore
+      // Debounced save to Firestore (saves both lists)
       useEffect(() => {
         if (!user || !db) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-          saveProfile(user, rankedList);
+          saveProfile(user, rankedList, tvRankedList);
         }, 1500);
         return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-      }, [rankedList, user]);
+      }, [rankedList, tvRankedList, user]);
 
       function showToast(msg) {
         setToast(msg);
@@ -1119,56 +1261,56 @@
           showToast("Sign in to share your rankings!");
           return;
         }
-        const url = window.location.origin + window.location.pathname + "?u=" + user.uid;
+        let url = window.location.origin + window.location.pathname + "?u=" + user.uid;
+        if (isTV) url += "&type=tv";
         navigator.clipboard.writeText(url).then(() => {
           showToast("Share link copied to clipboard!");
         }).catch(() => {
-          // Fallback: show the URL
           showToast("Share URL: " + url);
         });
       }
 
       function handleSelectMovie(movie) {
-        if (rankedIds.has(movie.id)) {
+        if (activeIds.has(movie.id)) {
           showToast(`"${movie.title}" is already ranked!`);
           return;
         }
-        if (rankedList.length === 0) {
-          setRankedList([movie]);
+        if (activeList.length === 0) {
+          setActiveList([movie]);
           const score = getScore(0, 1);
           showToast(`"${movie.title}" added as #1 (${score.toFixed(1)})!`);
           return;
         }
-        const s = createSession(movie, rankedList);
+        const s = createSession(movie, activeList);
         if (s.done) {
-          const newList = [...rankedList];
+          const newList = [...activeList];
           newList.splice(s.insertIndex, 0, movie);
-          setRankedList(newList);
+          setActiveList(newList);
           const score = getScore(s.insertIndex, newList.length);
           showToast(`"${movie.title}" ranked #${s.insertIndex + 1} (${score.toFixed(1)})!`);
         } else {
-          setSession(s);
+          setActiveSession(s);
         }
       }
 
       function handleChoice(preferNew) {
-        const next = recordChoice(session, preferNew);
+        const next = recordChoice(activeSession, preferNew);
         if (next.done) {
-          const newList = [...rankedList];
+          const newList = [...activeList];
           newList.splice(next.insertIndex, 0, next.newMovie);
-          setRankedList(newList);
+          setActiveList(newList);
           const score = getScore(next.insertIndex, newList.length);
           showToast(`"${next.newMovie.title}" ranked #${next.insertIndex + 1} (${score.toFixed(1)})!`);
-          setSession(null);
+          setActiveSession(null);
         } else {
-          setSession(next);
+          setActiveSession(next);
         }
       }
 
-      function handleRemove(id) { setRankedList(prev => prev.filter(m => m.id !== id)); }
-      function handleClear() { setRankedList([]); }
+      function handleRemove(id) { setActiveList(prev => prev.filter(m => m.id !== id)); }
+      function handleClear() { setActiveList([]); }
       function handleMove(fromIdx, toIdx) {
-        setRankedList(prev => {
+        setActiveList(prev => {
           const next = [...prev];
           const [item] = next.splice(fromIdx, 1);
           next.splice(toIdx, 0, item);
@@ -1183,9 +1325,9 @@
 
       function handleBackFromProfile() {
         setViewingUid(null);
-        // Clear URL param
         const url = new URL(window.location);
         url.searchParams.delete("u");
+        url.searchParams.delete("type");
         window.history.replaceState({}, "", url);
       }
 
@@ -1194,6 +1336,7 @@
         setTab("rank");
         const url = new URL(window.location);
         url.searchParams.delete("u");
+        url.searchParams.delete("type");
         window.history.replaceState({}, "", url);
       }
 
@@ -1204,14 +1347,16 @@
           handleBackFromProfile();
         } else {
           return (
-            <div>
+            <div className={isTV ? "tv-mode" : ""}>
               <div className="header">
                 <h1 onClick={handleGoHome}>&#x1F3AC; Mo<span>vi</span></h1>
-                <p>Movie rankings</p>
+                <p>{isTV ? "TV show" : "Movie"} rankings</p>
               </div>
               <AuthBar user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} authLoading={authLoading} />
-              <ProfileView uid={viewingUid} onBack={handleBackFromProfile} onAddMovie={handleSelectMovie} rankedIds={rankedIds} />
-              <ComparisonView session={session} onChoice={handleChoice} onCancel={() => setSession(null)} />
+              <ProfileView uid={viewingUid} onBack={handleBackFromProfile} onAddMovie={handleSelectMovie}
+                rankedIds={rankedIds} tvRankedIds={tvRankedIds} defaultTab={isTV ? "tv" : "movies"} />
+              <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
+                itemLabel={isTV ? "TV show" : "movie"} />
               <Toast message={toast} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
                 <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:"8px",color:"var(--text-muted)",textDecoration:"none",fontSize:"12px"}}>
@@ -1225,14 +1370,24 @@
       }
 
       return (
-        <div>
+        <div className={isTV ? "tv-mode" : ""}>
           <div className="header">
             <h1 onClick={handleGoHome}>&#x1F3AC; Mo<span>vi</span></h1>
-            <p>Rank movies head-to-head. No star ratings — just your preferences.</p>
+            <p>Rank {isTV ? "TV shows" : "movies"} head-to-head. No star ratings — just your preferences.</p>
           </div>
+
+          <div className="mode-toggle">
+            <button className={`mode-btn ${!isTV ? "active" : ""}`} onClick={() => setMode("movies")}>
+              &#x1F3AC; Movies
+            </button>
+            <button className={`mode-btn ${isTV ? "active" : ""}`} onClick={() => setMode("tv")}>
+              &#x1F4FA; TV Shows
+            </button>
+          </div>
+
           <AuthBar user={user} onSignIn={handleSignIn} onSignOut={handleSignOut} authLoading={authLoading} />
 
-          {FIREBASE_READY && !user && !authLoading && rankedList.length > 0 && (
+          {FIREBASE_READY && !user && !authLoading && activeList.length > 0 && (
             <div className="signin-prompt">
               <p>Sign in to save your rankings to the cloud and share them with friends.</p>
               <button className="auth-btn auth-btn-signin" onClick={handleSignIn}>
@@ -1254,10 +1409,16 @@
 
           {tab === "rank" && (
             <>
-              <SearchBar onSelect={handleSelectMovie} rankedIds={rankedIds} />
-              <Recommendations onSelect={handleSelectMovie} rankedIds={rankedIds} rankedList={rankedList} />
-              <RankedList list={rankedList} onRemove={handleRemove} onClear={handleClear}
-                onMove={handleMove} onShare={handleShare} user={user} />
+              <SearchBar onSelect={handleSelectMovie} rankedIds={activeIds}
+                localDb={isTV ? TV_DB : MOVIE_DB}
+                searchFn={isTV ? searchTMDBTV : searchTMDB}
+                placeholder={isTV ? "Search for a TV show to rank..." : "Search for a movie to rank..."}
+                customLabel={isTV ? "TV show" : "movie"} />
+              <Recommendations onSelect={handleSelectMovie} rankedIds={activeIds} rankedList={activeList}
+                localDb={isTV ? TV_DB : MOVIE_DB} mode={mode} />
+              <RankedList list={activeList} onRemove={handleRemove} onClear={handleClear}
+                onMove={handleMove} onShare={handleShare} user={user}
+                itemLabel={isTV ? "TV show" : "movie"} />
             </>
           )}
 
@@ -1265,7 +1426,8 @@
             <CommunityView onViewProfile={handleViewProfile} currentUid={user ? user.uid : null} />
           )}
 
-          <ComparisonView session={session} onChoice={handleChoice} onCancel={() => setSession(null)} />
+          <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
+            itemLabel={isTV ? "TV show" : "movie"} />
           <Toast message={toast} />
           <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
             <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:"8px",color:"var(--text-muted)",textDecoration:"none",fontSize:"12px"}}>
