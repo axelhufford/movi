@@ -1290,7 +1290,7 @@
                     </div>
                   )}
                   {!readOnly && <button className="remove-btn" onClick={() => onRemove(movie.id)} title="Remove">&#x2715;</button>}
-                  {readOnly && onBookmark && (
+                  {onBookmark && (
                     <button className={`bookmark-btn ${watchlistIds && watchlistIds.has(movie.id) ? "bookmarked" : ""}`}
                       disabled={watchlistIds && watchlistIds.has(movie.id) || (rankedIds && rankedIds.has(movie.id))}
                       onClick={(e) => { e.stopPropagation(); onBookmark(movie); }}
@@ -1298,7 +1298,7 @@
                       {watchlistIds && watchlistIds.has(movie.id) ? "\u2605" : "\u2606"}
                     </button>
                   )}
-                  {readOnly && onAddMovie && (
+                  {onAddMovie && (
                     <button className="profile-add-btn"
                       disabled={rankedIds && rankedIds.has(movie.id)}
                       onClick={(e) => { e.stopPropagation(); onAddMovie(movie); }}
@@ -1525,6 +1525,9 @@
             <RankedList list={activeList} readOnly={false}
               onRemove={handleAdminRemove} onMove={handleAdminMove}
               onClear={() => profileTab === "movies" ? setEditedMovies([]) : setEditedTv([])}
+              onAddMovie={(movie) => onAddMovie(movie, profileTab === "tv" ? "tv" : "movies")}
+              onBookmark={(movie) => onBookmark(movie, profileTab === "tv" ? "tv" : "movies")}
+              rankedIds={activeIds} watchlistIds={activeWlIds}
               itemLabel={profileTab === "tv" ? "TV show" : "movie"} />
           ) : (
             <RankedList list={activeList} readOnly={true}
