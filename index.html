@@ -677,13 +677,12 @@
         const resp = await fetch(`${TMDB_TV_SEARCH_URL}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&language=en-US&page=1`);
         if (!resp.ok) return [];
         const data = await resp.json();
-        return (data.results || []).map(s => ({
-          id: s.id,
-          title: s.name,
-          year: s.first_air_date ? s.first_air_date.slice(0, 4) : "",
-          genre: s.genre_ids && s.genre_ids.length ? (TV_GENRE_MAP[s.genre_ids[0]] || "Drama") : "Drama",
-          poster: s.poster_path || null,
-        }));
+        return (data.results || []).map(s => {
+          const baseGenre = s.genre_ids && s.genre_ids.length ? (TV_GENRE_MAP[s.genre_ids[0]] || "Drama") : "Drama";
+          const rating = s.vote_average || null;
+          const genre = rating >= 8.0 ? baseGenre + ", Critically Acclaimed" : baseGenre;
+          return { id: s.id, title: s.name, year: s.first_air_date ? s.first_air_date.slice(0, 4) : "", genre, poster: s.poster_path || null, rating };
+        });
       } catch (e) {
         console.error("TMDB TV search error:", e);
         return [];
@@ -695,13 +694,12 @@
         const resp = await fetch(`${TMDB_SEARCH_URL}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&language=en-US&page=1`);
         if (!resp.ok) return [];
         const data = await resp.json();
-        return (data.results || []).map(m => ({
-          id: m.id,
-          title: m.title,
-          year: m.release_date ? m.release_date.slice(0, 4) : "",
-          genre: m.genre_ids && m.genre_ids.length ? (GENRE_MAP[m.genre_ids[0]] || "Drama") : "Drama",
-          poster: m.poster_path || null,
-        }));
+        return (data.results || []).map(m => {
+          const baseGenre = m.genre_ids && m.genre_ids.length ? (GENRE_MAP[m.genre_ids[0]] || "Drama") : "Drama";
+          const rating = m.vote_average || null;
+          const genre = rating >= 8.0 ? baseGenre + ", Critically Acclaimed" : baseGenre;
+          return { id: m.id, title: m.title, year: m.release_date ? m.release_date.slice(0, 4) : "", genre, poster: m.poster_path || null, rating };
+        });
       } catch (e) {
         console.error("TMDB search error:", e);
         return [];
@@ -762,7 +760,7 @@
     async function saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist) {
       if (!db || !user) return;
       try {
-        const toSave = m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster });
+        const toSave = m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster, rating: m.rating || null });
         await db.collection("profiles").doc(user.uid).set({
           displayName: user.displayName || "Anonymous",
           photoURL: user.photoURL || null,
@@ -795,7 +793,7 @@
     async function adminSaveProfile(uid, movies, tvShows) {
       if (!db) return;
       try {
-        const toSave = m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster });
+        const toSave = m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster, rating: m.rating || null });
         await db.collection("profiles").doc(uid).update({
           movies: movies.map(toSave),
           movieCount: movies.length,
@@ -1656,6 +1654,35 @@
       useEffect(() => {
         document.body.style.background = isTV ? "#0a1a12" : "#0d0d0d";
       }, [isTV]);
+
+      // Backfill TMDB ratings for existing movies/shows
+      useEffect(() => {
+        async function backfillRatings(list, setList, type) {
+          const needsRating = list.filter(m => m.rating == null);
+          if (needsRating.length === 0) return;
+          const endpoint = type === "tv" ? "tv" : "movie";
+          const fetches = needsRating.map(async m => {
+            try {
+              const resp = await fetch(`https://api.themoviedb.org/3/${endpoint}/${m.id}?api_key=${TMDB_API_KEY}`);
+              if (!resp.ok) return { id: m.id, rating: null };
+              const data = await resp.json();
+              return { id: m.id, rating: data.vote_average || null };
+            } catch { return { id: m.id, rating: null }; }
+          });
+          const results = await Promise.all(fetches);
+          const ratingMap = {};
+          results.forEach(r => { ratingMap[r.id] = r.rating; });
+          setList(prev => prev.map(m => {
+            if (m.rating != null) return m;
+            const r = ratingMap[m.id];
+            const genre = r >= 9.0 && m.genre && !m.genre.includes("Critically Acclaimed")
+              ? m.genre + ", Critically Acclaimed" : m.genre;
+            return { ...m, rating: r, genre };
+          }));
+        }
+        backfillRatings(rankedList, setRankedList, "movie");
+        backfillRatings(tvRankedList, setTvRankedList, "tv");
+      }, []);
 
       // Check URL for shared profile
       useEffect(() => {
