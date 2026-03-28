@@ -1659,6 +1659,7 @@
       // Backfill TMDB ratings for movies/shows missing them
       async function backfillRatings(list, setList, type) {
         const needsRating = list.filter(m => m.rating == null);
+        console.log("[Backfill]", type, "needs rating:", needsRating.length, "of", list.length);
         if (needsRating.length === 0) return;
         const endpoint = type === "tv" ? "tv" : "movie";
         const fetches = needsRating.map(async m => {
@@ -1666,19 +1667,24 @@
             const resp = await fetch(`https://api.themoviedb.org/3/${endpoint}/${m.id}?api_key=${TMDB_API_KEY}`);
             if (!resp.ok) return { id: m.id, rating: null };
             const data = await resp.json();
+            console.log("[Backfill]", m.title, "rating:", data.vote_average);
             return { id: m.id, rating: data.vote_average || null };
-          } catch { return { id: m.id, rating: null }; }
+          } catch(e) { console.error("[Backfill] fetch error:", e); return { id: m.id, rating: null }; }
         });
         const results = await Promise.all(fetches);
         const ratingMap = {};
         results.forEach(r => { ratingMap[r.id] = r.rating; });
-        setList(prev => prev.map(m => {
-          if (m.rating != null) return m;
-          const r = ratingMap[m.id];
-          const genre = r >= 8.0 && m.genre && !m.genre.includes("Critically Acclaimed")
-            ? m.genre + ", Critically Acclaimed" : m.genre;
-          return { ...m, rating: r, genre };
-        }));
+        setList(prev => {
+          const updated = prev.map(m => {
+            if (m.rating != null) return m;
+            const r = ratingMap[m.id];
+            const genre = r >= 8.0 && m.genre && !m.genre.includes("Critically Acclaimed")
+              ? m.genre + ", Critically Acclaimed" : m.genre;
+            return { ...m, rating: r, genre };
+          });
+          console.log("[Backfill]", type, "updated genres:", updated.map(m => m.title + ": " + m.genre));
+          return updated;
+        });
       }
 
       // Check URL for shared profile
