@@ -388,6 +388,43 @@
     .profile-add-btn:hover { background: var(--accent-hover); }
     .profile-add-btn:disabled { opacity: 0.4; cursor: default; background: #555; }
 
+    /* Bookmark / Watchlist buttons */
+    .bookmark-btn {
+      background: none; border: none; cursor: pointer; font-size: 1.1rem;
+      padding: 4px 6px; transition: all 0.2s; flex-shrink: 0; border-radius: 4px;
+      color: #555; line-height: 1;
+    }
+    .bookmark-btn:hover { color: var(--gold); transform: scale(1.15); }
+    .bookmark-btn.bookmarked { color: var(--gold); }
+    .bookmark-btn:disabled { opacity: 0.3; cursor: default; transform: none; }
+
+    /* Watchlist */
+    .watchlist-section { margin-top: 10px; }
+    .watchlist-empty {
+      text-align: center; padding: 60px 20px; color: var(--text-muted);
+      border: 2px dashed #333; border-radius: var(--radius);
+    }
+    .watchlist-empty p:first-child { font-size: 2rem; margin-bottom: 10px; }
+    .watchlist-list { display: flex; flex-direction: column; gap: 6px; }
+    .watchlist-item {
+      display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+      background: var(--surface); border-radius: var(--radius);
+      transition: background 0.15s;
+    }
+    .watchlist-item:hover { background: var(--surface2); }
+    .watchlist-watched-btn {
+      padding: 5px 10px; background: #2e7d32; color: #fff; border: none;
+      border-radius: 6px; cursor: pointer; font-size: 0.7rem; font-weight: 600;
+      flex-shrink: 0; transition: all 0.2s; white-space: nowrap;
+    }
+    .watchlist-watched-btn:hover { background: #388e3c; }
+    .watchlist-remove-btn {
+      background: none; border: none; color: #444; cursor: pointer;
+      font-size: 1rem; padding: 4px 6px; transition: color 0.2s; border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .watchlist-remove-btn:hover { color: var(--accent); }
+
     /* Confirm */
     .confirm-overlay {
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -633,7 +670,7 @@
     }
 
     // ─── Firestore Helpers ──────────────────────────────────────
-    async function saveProfile(user, rankedList, tvRankedList) {
+    async function saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist) {
       if (!db || !user) return;
       try {
         const toSave = m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster });
@@ -644,6 +681,10 @@
           movieCount: rankedList.length,
           tvShows: tvRankedList.map(toSave),
           tvShowCount: tvRankedList.length,
+          watchlist: (watchlist || []).map(toSave),
+          watchlistCount: (watchlist || []).length,
+          tvWatchlist: (tvWatchlist || []).map(toSave),
+          tvWatchlistCount: (tvWatchlist || []).length,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
       } catch (e) {
@@ -690,7 +731,7 @@
     const POPULAR_MOVIE_IDS = [278,155,13,550,27205,603,680,329,597,98,862,8587,12,105,76341,157336,872585,361743,545611,496243,475557,346698,693134,533535,402431,299534,299536,24428,1726,118340,284054,293660,263115,324857,634649,414906,109445,277834,354912,301528,10681,585,38,37799,106646,562,949,807,274,769,500,115,578,694,348,679,62,85,10193,14160,9806,2062,244786,1124,77,6977,24,73,7345,210577,335984,78,37165,68718,16869,424,424694,332562,419430,530915,374720,313369];
     const POPULAR_TV_IDS = [1396,1399,66732,1418,60735,456,1402,1668,63174,71446,82856,76479,1100,95557,84958,2316,94997,93405,60574,62560,87108,85552,100088,114472,71712,44217,1405,63926,31917,67744,69478,32726,4614,1434,2190,1622,246,84773,1395,1104,2382,72879,61889,96677,2734,61175,4607,68507,75006,71789];
 
-    function Recommendations({ onSelect, rankedIds, rankedList, localDb, mode }) {
+    function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, rankedList, localDb, mode }) {
       const isTV = mode === "tv";
       const categories = useMemo(() => {
         const db = localDb;
@@ -752,10 +793,12 @@
               <div className="recs-row">
                 {cat.movies.map(m => {
                   const isRanked = rankedIds.has(m.id);
+                  const isWatchlisted = watchlistIds && watchlistIds.has(m.id);
                   return (
                     <div key={m.id} className={`rec-card ${isRanked ? "ranked" : ""}`}
-                      onClick={() => !isRanked && onSelect(m)}>
+                      onClick={() => !isRanked && !isWatchlisted && onSelect(m)}>
                       {isRanked && <div className="rec-card-badge">Ranked</div>}
+                      {isWatchlisted && <div className="rec-card-badge" style={{background:"rgba(245,197,24,0.9)"}}>&#x2605;</div>}
                       <Poster poster={m.poster} title={m.title}
                         style={{ width: "100%", height: "auto", aspectRatio: "2/3", borderRadius: 8 }} />
                       <div className="rec-card-title">{m.title}</div>
@@ -771,7 +814,7 @@
     }
 
     // ─── Search Bar ─────────────────────────────────────────────
-    function SearchBar({ onSelect, rankedIds, localDb, searchFn, placeholder, customLabel }) {
+    function SearchBar({ onSelect, onBookmark, rankedIds, watchlistIds, localDb, searchFn, placeholder, customLabel }) {
       const [query, setQuery] = useState("");
       const [open, setOpen] = useState(false);
       const [tmdbResults, setTmdbResults] = useState([]);
@@ -851,6 +894,14 @@
                       <div className="search-item-year">{m.year} &middot; {m.genre}</div>
                     </div>
                     {isDupe && <span className="search-item-dupe">Already ranked</span>}
+                    {onBookmark && !isDupe && (
+                      <button className={`bookmark-btn ${watchlistIds && watchlistIds.has(m.id) ? "bookmarked" : ""}`}
+                        disabled={watchlistIds && watchlistIds.has(m.id)}
+                        onClick={(e) => { e.stopPropagation(); onBookmark(m); }}
+                        title={watchlistIds && watchlistIds.has(m.id) ? "On watchlist" : "Add to watchlist"}>
+                        {watchlistIds && watchlistIds.has(m.id) ? "\u2605" : "\u2606"}
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -901,7 +952,7 @@
     }
 
     // ─── Ranked List (with optional read-only mode) ─────────────
-    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, rankedIds, itemLabel }) {
+    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel }) {
       const [confirmClear, setConfirmClear] = useState(false);
       const total = list.length;
 
@@ -963,6 +1014,14 @@
                     </div>
                   )}
                   {!readOnly && <button className="remove-btn" onClick={() => onRemove(movie.id)} title="Remove">&#x2715;</button>}
+                  {readOnly && onBookmark && (
+                    <button className={`bookmark-btn ${watchlistIds && watchlistIds.has(movie.id) ? "bookmarked" : ""}`}
+                      disabled={watchlistIds && watchlistIds.has(movie.id) || (rankedIds && rankedIds.has(movie.id))}
+                      onClick={(e) => { e.stopPropagation(); onBookmark(movie); }}
+                      title={watchlistIds && watchlistIds.has(movie.id) ? "On watchlist" : "Add to watchlist"}>
+                      {watchlistIds && watchlistIds.has(movie.id) ? "\u2605" : "\u2606"}
+                    </button>
+                  )}
                   {readOnly && onAddMovie && (
                     <button className="profile-add-btn"
                       disabled={rankedIds && rankedIds.has(movie.id)}
@@ -1070,7 +1129,7 @@
     }
 
     // ─── Profile View (viewing someone else's rankings) ─────────
-    function ProfileView({ uid, onBack, onAddMovie, rankedIds, tvRankedIds, defaultTab }) {
+    function ProfileView({ uid, onBack, onAddMovie, onBookmark, rankedIds, tvRankedIds, watchlistIds, tvWatchlistIds, defaultTab }) {
       const [profile, setProfile] = useState(null);
       const [loading, setLoading] = useState(true);
       const [profileTab, setProfileTab] = useState(defaultTab || "movies");
@@ -1101,6 +1160,7 @@
       const tvList = profile.tvShows || [];
       const activeList = profileTab === "movies" ? movieList : tvList;
       const activeIds = profileTab === "movies" ? rankedIds : tvRankedIds;
+      const activeWlIds = profileTab === "movies" ? watchlistIds : tvWatchlistIds;
 
       return (
         <div>
@@ -1126,7 +1186,8 @@
           </div>
           <RankedList list={activeList} readOnly={true}
             onAddMovie={(movie) => onAddMovie(movie, profileTab === "tv" ? "tv" : "movies")}
-            rankedIds={activeIds}
+            onBookmark={(movie) => onBookmark(movie, profileTab === "tv" ? "tv" : "movies")}
+            rankedIds={activeIds} watchlistIds={activeWlIds}
             itemLabel={profileTab === "tv" ? "TV show" : "movie"} />
         </div>
       );
@@ -1237,6 +1298,12 @@
       const [tvRankedList, setTvRankedList] = useState(() => {
         try { return JSON.parse(localStorage.getItem("movi-tv-ranked-list")) || []; } catch { return []; }
       });
+      const [watchlist, setWatchlist] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("movi-watchlist")) || []; } catch { return []; }
+      });
+      const [tvWatchlist, setTvWatchlist] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("movi-tv-watchlist")) || []; } catch { return []; }
+      });
       const [session, setSession] = useState(null);
       const [tvSession, setTvSession] = useState(null);
       const [toast, setToast] = useState("");
@@ -1259,6 +1326,11 @@
       const rankedIds = new Set(rankedList.map(m => m.id));
       const tvRankedIds = new Set(tvRankedList.map(m => m.id));
       const activeIds = isTV ? tvRankedIds : rankedIds;
+      const activeWatchlist = isTV ? tvWatchlist : watchlist;
+      const setActiveWatchlist = isTV ? setTvWatchlist : setWatchlist;
+      const watchlistIds = new Set(watchlist.map(m => m.id));
+      const tvWatchlistIds = new Set(tvWatchlist.map(m => m.id));
+      const activeWatchlistIds = isTV ? tvWatchlistIds : watchlistIds;
 
       // Apply TV mode to body for background color
       useEffect(() => {
@@ -1298,6 +1370,19 @@
                   setTvRankedList(profile.tvShows);
                 }
               }
+              // Sync watchlists
+              if (profile.watchlist && profile.watchlist.length > 0) {
+                const localWl = JSON.parse(localStorage.getItem("movi-watchlist") || "[]");
+                if (localWl.length === 0 || profile.watchlistCount > localWl.length) {
+                  setWatchlist(profile.watchlist);
+                }
+              }
+              if (profile.tvWatchlist && profile.tvWatchlist.length > 0) {
+                const localTvWl = JSON.parse(localStorage.getItem("movi-tv-watchlist") || "[]");
+                if (localTvWl.length === 0 || profile.tvWatchlistCount > localTvWl.length) {
+                  setTvWatchlist(profile.tvWatchlist);
+                }
+              }
             }
           }
         });
@@ -1321,16 +1406,22 @@
       useEffect(() => {
         localStorage.setItem("movi-tv-ranked-list", JSON.stringify(tvRankedList));
       }, [tvRankedList]);
+      useEffect(() => {
+        localStorage.setItem("movi-watchlist", JSON.stringify(watchlist));
+      }, [watchlist]);
+      useEffect(() => {
+        localStorage.setItem("movi-tv-watchlist", JSON.stringify(tvWatchlist));
+      }, [tvWatchlist]);
 
-      // Debounced save to Firestore (saves both lists)
+      // Debounced save to Firestore (saves all lists)
       useEffect(() => {
         if (!user || !db) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-          saveProfile(user, rankedList, tvRankedList);
+          saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist);
         }, 1500);
         return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-      }, [rankedList, tvRankedList, user]);
+      }, [rankedList, tvRankedList, watchlist, tvWatchlist, user]);
 
       function showToast(msg) {
         setToast(msg);
@@ -1435,6 +1526,38 @@
         });
       }
 
+      function handleAddToWatchlist(movie, forceType) {
+        const useTV = forceType ? forceType === "tv" : isTV;
+        const targetWl = useTV ? tvWatchlist : watchlist;
+        const targetSetWl = useTV ? setTvWatchlist : setWatchlist;
+        const targetWlIds = useTV ? tvWatchlistIds : watchlistIds;
+        const targetRankedIds = useTV ? tvRankedIds : rankedIds;
+
+        if (targetWlIds.has(movie.id)) {
+          showToast(`"${movie.title}" is already on your watchlist!`);
+          return;
+        }
+        if (targetRankedIds.has(movie.id)) {
+          showToast(`"${movie.title}" is already ranked!`);
+          return;
+        }
+        if (forceType && forceType !== mode) {
+          setMode(forceType);
+        }
+        targetSetWl(prev => [...prev, movie]);
+        showToast(`"${movie.title}" added to watchlist!`);
+      }
+
+      function handleRemoveFromWatchlist(id) {
+        setActiveWatchlist(prev => prev.filter(m => m.id !== id));
+      }
+
+      function handleWatchedIt(movie) {
+        // Remove from watchlist, then trigger ranking flow
+        setActiveWatchlist(prev => prev.filter(m => m.id !== movie.id));
+        handleSelectMovie(movie);
+      }
+
       function handleSelectMovie(movie, forceType) {
         // If forceType is specified (from friend profile), use that list instead of current mode
         const useTV = forceType ? forceType === "tv" : isTV;
@@ -1537,7 +1660,10 @@
                 authDisplayName={authDisplayName} setAuthDisplayName={setAuthDisplayName}
                 authError={authError} onEmailSignIn={handleEmailSignIn} onEmailSignUp={handleEmailSignUp} />
               <ProfileView uid={viewingUid} onBack={handleBackFromProfile} onAddMovie={handleSelectMovie}
-                rankedIds={rankedIds} tvRankedIds={tvRankedIds} defaultTab={isTV ? "tv" : "movies"} />
+                onBookmark={handleAddToWatchlist}
+                rankedIds={rankedIds} tvRankedIds={tvRankedIds}
+                watchlistIds={watchlistIds} tvWatchlistIds={tvWatchlistIds}
+                defaultTab={isTV ? "tv" : "movies"} />
               <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
                 itemLabel={isTV ? "TV show" : "movie"} />
               <Toast message={toast} />
@@ -1588,30 +1714,74 @@
             </div>
           )}
 
-          {FIREBASE_READY && (
-            <div className="nav-tabs">
-              <button className={`nav-tab ${tab === "rank" ? "active" : ""}`} onClick={() => setTab("rank")}>
-                My Rankings
-              </button>
+          <div className="nav-tabs">
+            <button className={`nav-tab ${tab === "rank" ? "active" : ""}`} onClick={() => setTab("rank")}>
+              My Rankings
+            </button>
+            <button className={`nav-tab ${tab === "watchlist" ? "active" : ""}`} onClick={() => setTab("watchlist")}>
+              Watchlist {activeWatchlist.length > 0 ? `(${activeWatchlist.length})` : ""}
+            </button>
+            {FIREBASE_READY && (
               <button className={`nav-tab ${tab === "community" ? "active" : ""}`} onClick={() => setTab("community")}>
                 Community
               </button>
-            </div>
-          )}
+            )}
+          </div>
 
           {tab === "rank" && (
             <>
-              <SearchBar onSelect={handleSelectMovie} rankedIds={activeIds}
+              <SearchBar onSelect={handleSelectMovie} onBookmark={handleAddToWatchlist}
+                rankedIds={activeIds} watchlistIds={activeWatchlistIds}
                 localDb={isTV ? TV_DB : MOVIE_DB}
                 searchFn={isTV ? searchTMDBTV : searchTMDB}
                 placeholder={isTV ? "Search for a TV show to rank..." : "Search for a movie to rank..."}
                 customLabel={isTV ? "TV show" : "movie"} />
-              <Recommendations onSelect={handleSelectMovie} rankedIds={activeIds} rankedList={activeList}
+              <Recommendations onSelect={handleSelectMovie} onBookmark={handleAddToWatchlist}
+                rankedIds={activeIds} watchlistIds={activeWatchlistIds} rankedList={activeList}
                 localDb={isTV ? TV_DB : MOVIE_DB} mode={mode} />
               <RankedList list={activeList} onRemove={handleRemove} onClear={handleClear}
                 onMove={handleMove} onShare={handleShare} user={user}
                 itemLabel={isTV ? "TV show" : "movie"} />
             </>
+          )}
+
+          {tab === "watchlist" && (
+            <div className="watchlist-section">
+              <SearchBar onSelect={handleAddToWatchlist} rankedIds={activeWatchlistIds}
+                localDb={isTV ? TV_DB : MOVIE_DB}
+                searchFn={isTV ? searchTMDBTV : searchTMDB}
+                placeholder={isTV ? "Search for a TV show to add to watchlist..." : "Search for a movie to add to watchlist..."}
+                customLabel={isTV ? "TV show" : "movie"} />
+              {activeWatchlist.length === 0 ? (
+                <div className="watchlist-empty">
+                  <p>&#x1F4D6;</p>
+                  <p>No {isTV ? "TV shows" : "movies"} on your watchlist yet.</p>
+                  <p style={{fontSize:"0.85rem",marginTop:8}}>Search above to add some!</p>
+                </div>
+              ) : (
+                <>
+                  <h2 style={{marginBottom:16}}>Watchlist ({activeWatchlist.length})</h2>
+                  <div className="watchlist-list">
+                    {activeWatchlist.map(movie => (
+                      <div key={movie.id} className="watchlist-item">
+                        <Poster poster={movie.poster} title={movie.title}
+                          className={movie.poster ? "ranked-poster" : "ranked-poster-ph poster-placeholder"} />
+                        <div className="ranked-item-info">
+                          <div className="ranked-item-title">{movie.title}</div>
+                          <div className="ranked-item-year">{movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}</div>
+                        </div>
+                        <button className="watchlist-watched-btn" onClick={() => handleWatchedIt(movie)}
+                          title="Watched it — rank it now!">
+                          &#x2714; Watched
+                        </button>
+                        <button className="watchlist-remove-btn" onClick={() => handleRemoveFromWatchlist(movie.id)}
+                          title="Remove from watchlist">&#x2715;</button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           {tab === "community" && (
