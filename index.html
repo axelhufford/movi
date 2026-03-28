@@ -1155,7 +1155,7 @@
     }
 
     // ─── Profile View (viewing someone else's rankings) ─────────
-    function ProfileView({ uid, onBack, onAddMovie, onBookmark, rankedIds, tvRankedIds, watchlistIds, tvWatchlistIds, defaultTab, isAdmin }) {
+    function ProfileView({ uid, onBack, onAddMovie, onBookmark, rankedIds, tvRankedIds, watchlistIds, tvWatchlistIds, defaultTab, isAdmin, onTabChange }) {
       const [profile, setProfile] = useState(null);
       const [loading, setLoading] = useState(true);
       const [profileTab, setProfileTab] = useState(defaultTab || "movies");
@@ -1259,9 +1259,9 @@
             </div>
             <div className="profile-subtabs">
               <button className={`profile-subtab ${profileTab === "movies" ? "active" : ""}`}
-                onClick={() => setProfileTab("movies")}>Movies ({movieList.length})</button>
+                onClick={() => { setProfileTab("movies"); onTabChange && onTabChange("movies"); }}>Movies ({movieList.length})</button>
               <button className={`profile-subtab ${profileTab === "tv" ? "active" : ""}`}
-                onClick={() => setProfileTab("tv")}>TV Shows ({tvList.length})</button>
+                onClick={() => { setProfileTab("tv"); onTabChange && onTabChange("tv"); }}>TV Shows ({tvList.length})</button>
             </div>
             {hasChanges && (
               <button className="profile-back" onClick={handleAdminSave}
@@ -1775,7 +1775,8 @@
                 rankedIds={rankedIds} tvRankedIds={tvRankedIds}
                 watchlistIds={watchlistIds} tvWatchlistIds={tvWatchlistIds}
                 defaultTab={isTV ? "tv" : "movies"}
-                isAdmin={user && user.uid === ADMIN_UID} />
+                isAdmin={user && user.uid === ADMIN_UID}
+                onTabChange={(tab) => setMode(tab === "tv" ? "tv" : "movies")} />
               <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
                 onWatchlist={handleAddToWatchlistFromComparison}
                 itemLabel={isTV ? "TV show" : "movie"} />
