@@ -560,6 +560,8 @@
       db = firebase.firestore();
     }
 
+    const ADMIN_UID = "lF7taXh4NETa3h2UPZI6SGnWWcj2";
+
     // ─── Process Movie Database ─────────────────────────────────
     const TMDB_IMG = "https://image.tmdb.org/t/p/w200";
     const TMDB_IMG_LG = "https://image.tmdb.org/t/p/w300";
@@ -701,6 +703,22 @@
         console.error("Failed to load profile:", e);
       }
       return null;
+    }
+
+    async function adminSaveProfile(uid, movies, tvShows) {
+      if (!db) return;
+      try {
+        const toSave = m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster });
+        await db.collection("profiles").doc(uid).update({
+          movies: movies.map(toSave),
+          movieCount: movies.length,
+          tvShows: tvShows.map(toSave),
+          tvShowCount: tvShows.length,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        console.error("Failed to admin save profile:", e);
+      }
     }
 
     async function loadCommunityProfiles() {
@@ -1137,13 +1155,23 @@
     }
 
     // ─── Profile View (viewing someone else's rankings) ─────────
-    function ProfileView({ uid, onBack, onAddMovie, onBookmark, rankedIds, tvRankedIds, watchlistIds, tvWatchlistIds, defaultTab }) {
+    function ProfileView({ uid, onBack, onAddMovie, onBookmark, rankedIds, tvRankedIds, watchlistIds, tvWatchlistIds, defaultTab, isAdmin }) {
       const [profile, setProfile] = useState(null);
       const [loading, setLoading] = useState(true);
       const [profileTab, setProfileTab] = useState(defaultTab || "movies");
+      const [editedMovies, setEditedMovies] = useState(null);
+      const [editedTv, setEditedTv] = useState(null);
+      const [saving, setSaving] = useState(false);
 
       useEffect(() => {
-        loadProfile(uid).then(p => { setProfile(p); setLoading(false); });
+        loadProfile(uid).then(p => {
+          setProfile(p);
+          if (p) {
+            setEditedMovies(p.movies || []);
+            setEditedTv(p.tvShows || []);
+          }
+          setLoading(false);
+        });
       }, [uid]);
 
       if (loading) {
@@ -1164,11 +1192,55 @@
         );
       }
 
-      const movieList = profile.movies || [];
-      const tvList = profile.tvShows || [];
+      const movieList = isAdmin && editedMovies ? editedMovies : (profile.movies || []);
+      const tvList = isAdmin && editedTv ? editedTv : (profile.tvShows || []);
       const activeList = profileTab === "movies" ? movieList : tvList;
       const activeIds = profileTab === "movies" ? rankedIds : tvRankedIds;
       const activeWlIds = profileTab === "movies" ? watchlistIds : tvWatchlistIds;
+
+      function handleAdminRemove(id) {
+        if (profileTab === "movies") {
+          setEditedMovies(prev => prev.filter(m => m.id !== id));
+        } else {
+          setEditedTv(prev => prev.filter(m => m.id !== id));
+        }
+      }
+
+      function handleAdminMove(fromIdx, toIdx) {
+        if (profileTab === "movies") {
+          setEditedMovies(prev => {
+            const next = [...prev];
+            const [item] = next.splice(fromIdx, 1);
+            next.splice(toIdx, 0, item);
+            return next;
+          });
+        } else {
+          setEditedTv(prev => {
+            const next = [...prev];
+            const [item] = next.splice(fromIdx, 1);
+            next.splice(toIdx, 0, item);
+            return next;
+          });
+        }
+      }
+
+      async function handleAdminSave() {
+        setSaving(true);
+        await adminSaveProfile(uid, editedMovies || [], editedTv || []);
+        setSaving(false);
+        // Reload profile
+        const p = await loadProfile(uid);
+        if (p) {
+          setProfile(p);
+          setEditedMovies(p.movies || []);
+          setEditedTv(p.tvShows || []);
+        }
+      }
+
+      const hasChanges = isAdmin && (
+        JSON.stringify(editedMovies) !== JSON.stringify(profile.movies || []) ||
+        JSON.stringify(editedTv) !== JSON.stringify(profile.tvShows || [])
+      );
 
       return (
         <div>
@@ -1178,6 +1250,7 @@
               : <div className="profile-avatar-ph">{(profile.displayName || "?")[0]}</div>
             }
             <div className="profile-name">{profile.displayName || "Anonymous"}</div>
+            {isAdmin && <div style={{color:"var(--gold)",fontSize:"0.75rem",fontWeight:600,marginBottom:4}}>ADMIN MODE</div>}
             <div className="profile-count">
               {movieList.length > 0 && `${movieList.length} movies`}
               {movieList.length > 0 && tvList.length > 0 && " · "}
@@ -1190,13 +1263,26 @@
               <button className={`profile-subtab ${profileTab === "tv" ? "active" : ""}`}
                 onClick={() => setProfileTab("tv")}>TV Shows ({tvList.length})</button>
             </div>
+            {hasChanges && (
+              <button className="profile-back" onClick={handleAdminSave}
+                style={{background:"#2e7d32",marginRight:8}} disabled={saving}>
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            )}
             <button className="profile-back" onClick={onBack}>&#x2190; Back</button>
           </div>
-          <RankedList list={activeList} readOnly={true}
-            onAddMovie={(movie) => onAddMovie(movie, profileTab === "tv" ? "tv" : "movies")}
-            onBookmark={(movie) => onBookmark(movie, profileTab === "tv" ? "tv" : "movies")}
-            rankedIds={activeIds} watchlistIds={activeWlIds}
-            itemLabel={profileTab === "tv" ? "TV show" : "movie"} />
+          {isAdmin ? (
+            <RankedList list={activeList} readOnly={false}
+              onRemove={handleAdminRemove} onMove={handleAdminMove}
+              onClear={() => profileTab === "movies" ? setEditedMovies([]) : setEditedTv([])}
+              itemLabel={profileTab === "tv" ? "TV show" : "movie"} />
+          ) : (
+            <RankedList list={activeList} readOnly={true}
+              onAddMovie={(movie) => onAddMovie(movie, profileTab === "tv" ? "tv" : "movies")}
+              onBookmark={(movie) => onBookmark(movie, profileTab === "tv" ? "tv" : "movies")}
+              rankedIds={activeIds} watchlistIds={activeWlIds}
+              itemLabel={profileTab === "tv" ? "TV show" : "movie"} />
+          )}
         </div>
       );
     }
@@ -1688,7 +1774,8 @@
                 onBookmark={handleAddToWatchlist}
                 rankedIds={rankedIds} tvRankedIds={tvRankedIds}
                 watchlistIds={watchlistIds} tvWatchlistIds={tvWatchlistIds}
-                defaultTab={isTV ? "tv" : "movies"} />
+                defaultTab={isTV ? "tv" : "movies"}
+                isAdmin={user && user.uid === ADMIN_UID} />
               <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
                 onWatchlist={handleAddToWatchlistFromComparison}
                 itemLabel={isTV ? "TV show" : "movie"} />
