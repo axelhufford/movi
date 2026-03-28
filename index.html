@@ -1078,7 +1078,7 @@
             </div>
             <button className="profile-back" onClick={onBack}>&#x2190; Back</button>
           </div>
-          <RankedList list={activeList} readOnly={true} onAddMovie={onAddMovie} rankedIds={activeIds}
+          <RankedList list={activeList} readOnly={true} onAddMovie={(movie) => onAddMovie(movie, profileTab)} rankedIds={activeIds}
             itemLabel={profileTab === "tv" ? "TV show" : "movie"} />
         </div>
       );
@@ -1280,26 +1280,35 @@
         });
       }
 
-      function handleSelectMovie(movie) {
-        if (activeIds.has(movie.id)) {
+      function handleSelectMovie(movie, type) {
+        const itemIsTV = type === "tv";
+        // Switch mode if the item type doesn't match current mode
+        if (itemIsTV && mode !== "tv") setMode("tv");
+        else if (!itemIsTV && mode === "tv") setMode("movies");
+        // Use the correct list/ids/session directly rather than the mode-derived activeList
+        const targetIds = itemIsTV ? tvRankedIds : rankedIds;
+        const targetList = itemIsTV ? tvRankedList : rankedList;
+        const targetSetList = itemIsTV ? setTvRankedList : setRankedList;
+        const targetSetSession = itemIsTV ? setTvSession : setSession;
+        if (targetIds.has(movie.id)) {
           showToast(`"${movie.title}" is already ranked!`);
           return;
         }
-        if (activeList.length === 0) {
-          setActiveList([movie]);
+        if (targetList.length === 0) {
+          targetSetList([movie]);
           const score = getScore(0, 1);
           showToast(`"${movie.title}" added as #1 (${score.toFixed(1)})!`);
           return;
         }
-        const s = createSession(movie, activeList);
+        const s = createSession(movie, targetList);
         if (s.done) {
-          const newList = [...activeList];
+          const newList = [...targetList];
           newList.splice(s.insertIndex, 0, movie);
-          setActiveList(newList);
+          targetSetList(newList);
           const score = getScore(s.insertIndex, newList.length);
           showToast(`"${movie.title}" ranked #${s.insertIndex + 1} (${score.toFixed(1)})!`);
         } else {
-          setActiveSession(s);
+          targetSetSession(s);
         }
       }
 
