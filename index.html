@@ -681,8 +681,7 @@
         return (data.results || []).map(s => {
           const baseGenre = s.genre_ids && s.genre_ids.length ? (TV_GENRE_MAP[s.genre_ids[0]] || "Drama") : "Drama";
           const rating = s.vote_average || null;
-          const genre = rating >= 8.0 ? baseGenre + ", Critically Acclaimed" : baseGenre;
-          return { id: s.id, title: s.name, year: s.first_air_date ? s.first_air_date.slice(0, 4) : "", genre, poster: s.poster_path || null, rating };
+          return { id: s.id, title: s.name, year: s.first_air_date ? s.first_air_date.slice(0, 4) : "", genre: baseGenre, poster: s.poster_path || null, rating };
         });
       } catch (e) {
         console.error("TMDB TV search error:", e);
@@ -698,8 +697,7 @@
         return (data.results || []).map(m => {
           const baseGenre = m.genre_ids && m.genre_ids.length ? (GENRE_MAP[m.genre_ids[0]] || "Drama") : "Drama";
           const rating = m.vote_average || null;
-          const genre = rating >= 8.0 ? baseGenre + ", Critically Acclaimed" : baseGenre;
-          return { id: m.id, title: m.title, year: m.release_date ? m.release_date.slice(0, 4) : "", genre, poster: m.poster_path || null, rating };
+          return { id: m.id, title: m.title, year: m.release_date ? m.release_date.slice(0, 4) : "", genre: baseGenre, poster: m.poster_path || null, rating };
         });
       } catch (e) {
         console.error("TMDB search error:", e);
@@ -837,6 +835,28 @@
 
     function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, rankedList, localDb, mode }) {
       const isTV = mode === "tv";
+      const [acclaimed, setAcclaimed] = useState([]);
+
+      // Fetch critically acclaimed from TMDB top_rated
+      useEffect(() => {
+        if (!TMDB_API_KEY) return;
+        const endpoint = isTV
+          ? `https://api.themoviedb.org/3/tv/top_rated?api_key=${TMDB_API_KEY}&language=en-US&page=1`
+          : `https://api.themoviedb.org/3/movie/top_rated?api_key=${TMDB_API_KEY}&language=en-US&page=1`;
+        const genreMap = isTV ? TV_GENRE_MAP : GENRE_MAP;
+        fetch(endpoint).then(r => r.json()).then(data => {
+          const items = (data.results || []).filter(m => (m.vote_average || 0) >= 8.0).map(m => ({
+            id: m.id,
+            title: isTV ? m.name : m.title,
+            year: (isTV ? m.first_air_date : m.release_date || "").slice(0, 4),
+            genre: m.genre_ids && m.genre_ids.length ? (genreMap[m.genre_ids[0]] || "Drama") : "Drama",
+            poster: m.poster_path || null,
+            rating: m.vote_average || null,
+          }));
+          setAcclaimed(items);
+        }).catch(() => {});
+      }, [isTV]);
+
       const categories = useMemo(() => {
         const db = localDb;
         const popularIds = isTV ? POPULAR_TV_IDS : POPULAR_MOVIE_IDS;
@@ -880,6 +900,9 @@
         if (forYou.length > 0) cats.push({ title: forYouTitle, movies: forYou });
         cats.push(
           { title: "Popular", movies: shuffle(popular).slice(0, 20) },
+        );
+        if (acclaimed.length > 0) cats.push({ title: "🏆 Critically Acclaimed", movies: acclaimed });
+        cats.push(
           { title: "New Releases", movies: shuffle(newReleases).slice(0, 20) },
           { title: genre1, movies: shuffle(cat1).slice(0, 15) },
           { title: genre2, movies: shuffle(cat2).slice(0, 15) },
@@ -887,7 +910,7 @@
           { title: "Classics", movies: shuffle(classics).slice(0, 15) },
         );
         return cats;
-      }, [localDb, isTV, rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map(m => m.id).join(",") : ""]);
+      }, [localDb, isTV, acclaimed, rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map(m => m.id).join(",") : ""]);
 
       return (
         <div className="recs-section">
@@ -1658,21 +1681,19 @@
 
       // Backfill TMDB ratings for movies/shows missing them
       async function backfillRatings(list, setList, type) {
-        const needsRating = list.filter(m => m.rating == null);
-        const needsAcclaimed = list.filter(m => m.rating >= 8.0 && m.genre && !m.genre.includes("Critically Acclaimed"));
-        console.log("[Backfill]", type, "needs rating:", needsRating.length, "needs acclaimed:", needsAcclaimed.length, "of", list.length);
-
-        // First: fix any movies that have ratings but are missing "Critically Acclaimed"
-        if (needsAcclaimed.length > 0) {
-          setList(prev => prev.map(m => {
-            if (m.rating >= 8.0 && m.genre && !m.genre.includes("Critically Acclaimed")) {
-              return { ...m, genre: m.genre + ", Critically Acclaimed" };
-            }
-            return m;
-          }));
+        // Clean up any "Critically Acclaimed" that was previously appended to genres
+        const needsCleanup = list.some(m => m.genre && m.genre.includes("Critically Acclaimed"));
+        if (needsCleanup) {
+          setList(prev => prev.map(m => m.genre && m.genre.includes("Critically Acclaimed")
+            ? { ...m, genre: m.genre.replace(/, Critically Acclaimed/g, "").replace(/Critically Acclaimed,?\s*/g, "").trim() }
+            : m
+          ));
         }
 
-        // Then: fetch ratings for movies that don't have them yet
+        const needsRating = list.filter(m => m.rating == null);
+        console.log("[Backfill]", type, "needs rating:", needsRating.length, "of", list.length);
+
+        // Fetch ratings for movies that don't have them yet
         if (needsRating.length === 0) return;
         const endpoint = type === "tv" ? "tv" : "movie";
         const fetches = needsRating.map(async m => {
@@ -1689,9 +1710,7 @@
         setList(prev => prev.map(m => {
           if (m.rating != null) return m;
           const r = ratingMap[m.id];
-          const genre = r >= 8.0 && m.genre && !m.genre.includes("Critically Acclaimed")
-            ? m.genre + ", Critically Acclaimed" : m.genre;
-          return { ...m, rating: r, genre };
+          return { ...m, rating: r };
         }));
       }
 
