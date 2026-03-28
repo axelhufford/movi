@@ -919,7 +919,7 @@
     }
 
     // ─── Comparison View ────────────────────────────────────────
-    function ComparisonView({ session, onChoice, onCancel, itemLabel }) {
+    function ComparisonView({ session, onChoice, onCancel, onWatchlist, itemLabel }) {
       if (!session || session.done) return null;
       const { newMovie, compareMovie, step, maxSteps } = session;
 
@@ -945,7 +945,15 @@
               <Card movie={newMovie} onClick={() => onChoice(true)} />
               <Card movie={compareMovie} onClick={() => onChoice(false)} />
             </div>
-            <button className="comparison-cancel" onClick={onCancel}>Cancel</button>
+            <div style={{display:"flex",gap:"8px",justifyContent:"center",marginTop:"16px",flexWrap:"wrap"}}>
+              {onWatchlist && (
+                <button className="comparison-cancel" onClick={onWatchlist}
+                  style={{borderColor:"var(--gold)",color:"var(--gold)",marginTop:0}}>
+                  &#x2606; Add to Watchlist
+                </button>
+              )}
+              <button className="comparison-cancel" onClick={onCancel} style={{marginTop:0}}>Cancel</button>
+            </div>
           </div>
         </div>
       );
@@ -1526,6 +1534,14 @@
         });
       }
 
+      function handleAddToWatchlistFromComparison() {
+        // Add the movie being compared to watchlist instead of ranking
+        const s = activeSession;
+        if (!s) return;
+        setActiveSession(null);
+        handleAddToWatchlist(s.newMovie);
+      }
+
       function handleAddToWatchlist(movie, forceType) {
         const useTV = forceType ? forceType === "tv" : isTV;
         const targetWl = useTV ? tvWatchlist : watchlist;
@@ -1665,6 +1681,7 @@
                 watchlistIds={watchlistIds} tvWatchlistIds={tvWatchlistIds}
                 defaultTab={isTV ? "tv" : "movies"} />
               <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
+                onWatchlist={handleAddToWatchlistFromComparison}
                 itemLabel={isTV ? "TV show" : "movie"} />
               <Toast message={toast} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
@@ -1789,6 +1806,7 @@
           )}
 
           <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
+            onWatchlist={handleAddToWatchlistFromComparison}
             itemLabel={isTV ? "TV show" : "movie"} />
           <Toast message={toast} />
           <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
