@@ -4,15 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Movi</title>
-  <meta name="description" content="Rank movies and TV shows head-to-head. No star ratings — just your preferences." />
+  <meta name="description" content="Every movie ranked, one matchup at a time." />
   <meta property="og:title" content="Movi" />
-  <meta property="og:description" content="Rank movies and TV shows head-to-head. No star ratings — just your preferences." />
+  <meta property="og:description" content="Every movie ranked, one matchup at a time." />
   <meta property="og:image" content="https://axelhufford.github.io/movi/logo.svg" />
   <meta property="og:url" content="https://axelhufford.github.io/movi/" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Movi" />
-  <meta name="twitter:description" content="Rank movies and TV shows head-to-head. No star ratings — just your preferences." />
+  <meta name="twitter:description" content="Every movie ranked, one matchup at a time." />
   <meta name="twitter:image" content="https://axelhufford.github.io/movi/logo.svg" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1685,6 +1685,7 @@
                 itemLabel={isTV ? "TV show" : "movie"} />
               <Toast message={toast} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
+                <div style={{color:"var(--text-muted)",fontSize:"12px",marginBottom:"8px"}}>a website by Axel Hufford</div>
                 <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:"8px",color:"var(--text-muted)",textDecoration:"none",fontSize:"12px"}}>
                   <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg" alt="TMDB" style={{height:"16px"}} />
                   Data provided by TMDB
@@ -1699,7 +1700,7 @@
         <div className={isTV ? "tv-mode" : ""}>
           <div className="header">
             <h1 onClick={handleGoHome}>&#x1F3AC; Mo<span>vi</span></h1>
-            <p>Rank {isTV ? "TV shows" : "movies"} head-to-head. No star ratings — just your preferences.</p>
+            <p>Every {isTV ? "TV show" : "movie"} ranked, one matchup at a time.</p>
           </div>
 
           <div className="mode-toggle">
