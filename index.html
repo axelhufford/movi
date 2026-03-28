@@ -1656,34 +1656,30 @@
         document.body.style.background = isTV ? "#0a1a12" : "#0d0d0d";
       }, [isTV]);
 
-      // Backfill TMDB ratings for existing movies/shows
-      useEffect(() => {
-        async function backfillRatings(list, setList, type) {
-          const needsRating = list.filter(m => m.rating == null);
-          if (needsRating.length === 0) return;
-          const endpoint = type === "tv" ? "tv" : "movie";
-          const fetches = needsRating.map(async m => {
-            try {
-              const resp = await fetch(`https://api.themoviedb.org/3/${endpoint}/${m.id}?api_key=${TMDB_API_KEY}`);
-              if (!resp.ok) return { id: m.id, rating: null };
-              const data = await resp.json();
-              return { id: m.id, rating: data.vote_average || null };
-            } catch { return { id: m.id, rating: null }; }
-          });
-          const results = await Promise.all(fetches);
-          const ratingMap = {};
-          results.forEach(r => { ratingMap[r.id] = r.rating; });
-          setList(prev => prev.map(m => {
-            if (m.rating != null) return m;
-            const r = ratingMap[m.id];
-            const genre = r >= 9.0 && m.genre && !m.genre.includes("Critically Acclaimed")
-              ? m.genre + ", Critically Acclaimed" : m.genre;
-            return { ...m, rating: r, genre };
-          }));
-        }
-        backfillRatings(rankedList, setRankedList, "movie");
-        backfillRatings(tvRankedList, setTvRankedList, "tv");
-      }, []);
+      // Backfill TMDB ratings for movies/shows missing them
+      async function backfillRatings(list, setList, type) {
+        const needsRating = list.filter(m => m.rating == null);
+        if (needsRating.length === 0) return;
+        const endpoint = type === "tv" ? "tv" : "movie";
+        const fetches = needsRating.map(async m => {
+          try {
+            const resp = await fetch(`https://api.themoviedb.org/3/${endpoint}/${m.id}?api_key=${TMDB_API_KEY}`);
+            if (!resp.ok) return { id: m.id, rating: null };
+            const data = await resp.json();
+            return { id: m.id, rating: data.vote_average || null };
+          } catch { return { id: m.id, rating: null }; }
+        });
+        const results = await Promise.all(fetches);
+        const ratingMap = {};
+        results.forEach(r => { ratingMap[r.id] = r.rating; });
+        setList(prev => prev.map(m => {
+          if (m.rating != null) return m;
+          const r = ratingMap[m.id];
+          const genre = r >= 8.0 && m.genre && !m.genre.includes("Critically Acclaimed")
+            ? m.genre + ", Critically Acclaimed" : m.genre;
+          return { ...m, rating: r, genre };
+        }));
+      }
 
       // Check URL for shared profile
       useEffect(() => {
@@ -1732,6 +1728,15 @@
                 }
               }
             }
+            // Backfill ratings after Firestore sync
+            const movieList = (profile && profile.movies && profile.movies.length > 0) ? profile.movies : rankedList;
+            const tvList = (profile && profile.tvShows && profile.tvShows.length > 0) ? profile.tvShows : tvRankedList;
+            backfillRatings(movieList, setRankedList, "movie");
+            backfillRatings(tvList, setTvRankedList, "tv");
+          } else {
+            // Not signed in — backfill from localStorage
+            backfillRatings(rankedList, setRankedList, "movie");
+            backfillRatings(tvRankedList, setTvRankedList, "tv");
           }
         });
         return () => unsub();
