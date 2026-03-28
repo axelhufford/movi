@@ -894,51 +894,124 @@
     const POPULAR_MOVIE_IDS = [278,155,13,550,27205,603,680,329,597,98,862,8587,12,105,76341,157336,872585,361743,545611,496243,475557,346698,693134,533535,402431,299534,299536,24428,1726,118340,284054,293660,263115,324857,634649,414906,109445,277834,354912,301528,10681,585,38,37799,106646,562,949,807,274,769,500,115,578,694,348,679,62,85,10193,14160,9806,2062,244786,1124,77,6977,24,73,7345,210577,335984,78,37165,68718,16869,424,424694,332562,419430,530915,374720,313369];
     const POPULAR_TV_IDS = [1396,1399,66732,1418,60735,456,1402,1668,63174,71446,82856,76479,1100,95557,84958,2316,94997,93405,60574,62560,87108,85552,100088,114472,71712,44217,1405,63926,31917,67744,69478,32726,4614,1434,2190,1622,246,84773,1395,1104,2382,72879,61889,96677,2734,61175,4607,68507,75006,71789];
 
+    // TMDB genre IDs for discover endpoint
+    const TMDB_GENRE_IDS = { Horror: 27, Animation: 16, Comedy: 35, Romance: 10749, Drama: 18, Action: 28, "Sci-Fi": 878, Thriller: 53 };
+    const TMDB_TV_GENRE_IDS = { Drama: 18, Comedy: 35, "Sci-Fi & Fantasy": 10765, "Action & Adventure": 10759, Animation: 16, Crime: 80 };
+
+    // Fetch fresh unranked movies/shows from TMDB for a category
+    async function fetchTMDBCategory(endpoint, rankedIds, genreMap, isTV, limit) {
+      try {
+        // Fetch 2 pages for more variety
+        const [r1, r2] = await Promise.all([
+          fetch(endpoint + "&page=1").then(r => r.json()),
+          fetch(endpoint + "&page=" + (1 + Math.floor(Math.random() * 4))).then(r => r.json()),
+        ]);
+        const all = [...(r1.results || []), ...(r2.results || [])];
+        const items = all.map(m => ({
+          id: m.id,
+          title: isTV ? m.name : m.title,
+          year: (isTV ? m.first_air_date : m.release_date || "").slice(0, 4),
+          genre: m.genre_ids && m.genre_ids.length ? (genreMap[m.genre_ids[0]] || "Drama") : "Drama",
+          poster: m.poster_path || null,
+          rating: m.vote_average || null,
+        })).filter(m => m.poster && m.title);
+        // Dedupe
+        const seen = new Set();
+        const unique = items.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+        // Unranked first, then ranked
+        const unranked = unique.filter(m => !rankedIds.has(m.id));
+        const ranked = unique.filter(m => rankedIds.has(m.id));
+        return [...unranked, ...ranked].slice(0, limit || 20);
+      } catch (e) { return []; }
+    }
+
     function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, rankedList, localDb, mode }) {
       const isTV = mode === "tv";
-      const [acclaimed, setAcclaimed] = useState([]);
+      const [tmdbCats, setTmdbCats] = useState({});
+      const rankedCountRef = useRef(0);
 
-      // Fetch critically acclaimed from TMDB top_rated
+      // Fetch fresh TMDB data for all categories
       useEffect(() => {
         if (!TMDB_API_KEY) return;
-        const endpoint = isTV
-          ? `https://api.themoviedb.org/3/tv/top_rated?api_key=${TMDB_API_KEY}&language=en-US&page=1`
-          : `https://api.themoviedb.org/3/movie/top_rated?api_key=${TMDB_API_KEY}&language=en-US&page=1`;
-        const genreMap = isTV ? TV_GENRE_MAP : GENRE_MAP;
-        fetch(endpoint).then(r => r.json()).then(data => {
-          const items = (data.results || []).filter(m => (m.vote_average || 0) >= 8.0).map(m => ({
-            id: m.id,
-            title: isTV ? m.name : m.title,
-            year: (isTV ? m.first_air_date : m.release_date || "").slice(0, 4),
-            genre: m.genre_ids && m.genre_ids.length ? (genreMap[m.genre_ids[0]] || "Drama") : "Drama",
-            poster: m.poster_path || null,
-            rating: m.vote_average || null,
-          }));
-          setAcclaimed(items);
-        }).catch(() => {});
-      }, [isTV]);
-
-      const categories = useMemo(() => {
-        const db = localDb;
-        const popularIds = isTV ? POPULAR_TV_IDS : POPULAR_MOVIE_IDS;
-        const popularIdSet = new Set(popularIds);
-        const popular = db.filter(m => popularIdSet.has(m.id));
-        const newReleases = db.filter(m => parseInt(m.year) >= 2023);
-        const classicYear = isTV ? 2005 : 1990;
-        const classics = db.filter(m => parseInt(m.year) <= classicYear);
+        const base = isTV ? "https://api.themoviedb.org/3" : "https://api.themoviedb.org/3";
+        const type = isTV ? "tv" : "movie";
+        const gMap = isTV ? TV_GENRE_MAP : GENRE_MAP;
+        const gIds = isTV ? TMDB_TV_GENRE_IDS : TMDB_GENRE_IDS;
 
         const genre1 = isTV ? "Drama" : "Horror";
         const genre2 = isTV ? "Comedy" : "Animation";
-        const genre3Label = isTV ? "Sci-Fi & Fantasy" : "Comedies & Romance";
-        const cat1 = db.filter(m => m.genre === genre1);
-        const cat2 = db.filter(m => m.genre === genre2);
-        const cat3 = isTV
-          ? db.filter(m => m.genre === "Sci-Fi & Fantasy")
-          : db.filter(m => m.genre === "Comedy" || m.genre === "Romance");
 
-        // "For You" — based on user's top-ranked genres and decades
-        let forYou = [];
+        const endpoints = {
+          popular: `${base}/${type}/popular?api_key=${TMDB_API_KEY}&language=en-US`,
+          acclaimed: `${base}/${type}/top_rated?api_key=${TMDB_API_KEY}&language=en-US`,
+          newReleases: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&${isTV ? "first_air_date.gte" : "primary_release_date.gte"}=2023-01-01`,
+          genre1: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=${gIds[genre1] || 18}`,
+          genre2: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=${gIds[genre2] || 16}`,
+          genre3: isTV
+            ? `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=${gIds["Sci-Fi & Fantasy"] || 10765}`
+            : `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=35,10749`,
+          classics: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=vote_count.desc&${isTV ? "first_air_date.lte" : "primary_release_date.lte"}=${isTV ? "2005" : "1990"}-12-31`,
+        };
+
+        // Fetch for you based on user's top genres
+        let forYouPromise = Promise.resolve([]);
         if (rankedList && rankedList.length >= 3) {
+          const topHalf = rankedList.slice(0, Math.ceil(rankedList.length / 2));
+          const genreCounts = {};
+          topHalf.forEach(m => { if (m.genre) genreCounts[m.genre] = (genreCounts[m.genre] || 0) + 1; });
+          const topGenre = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0];
+          if (topGenre) {
+            const topGenreId = gIds[topGenre[0]];
+            if (topGenreId) {
+              const fyEndpoint = `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=vote_average.desc&vote_count.gte=100&with_genres=${topGenreId}`;
+              forYouPromise = fetchTMDBCategory(fyEndpoint, rankedIds, gMap, isTV, 20);
+            }
+          }
+        }
+
+        Promise.all([
+          forYouPromise,
+          fetchTMDBCategory(endpoints.popular, rankedIds, gMap, isTV, 20),
+          fetchTMDBCategory(endpoints.acclaimed, rankedIds, gMap, isTV, 20),
+          fetchTMDBCategory(endpoints.newReleases, rankedIds, gMap, isTV, 20),
+          fetchTMDBCategory(endpoints.genre1, rankedIds, gMap, isTV, 15),
+          fetchTMDBCategory(endpoints.genre2, rankedIds, gMap, isTV, 15),
+          fetchTMDBCategory(endpoints.genre3, rankedIds, gMap, isTV, 15),
+          fetchTMDBCategory(endpoints.classics, rankedIds, gMap, isTV, 15),
+        ]).then(([forYou, popular, acclaimed, newReleases, g1, g2, g3, classics]) => {
+          setTmdbCats({ forYou, popular, acclaimed, newReleases, g1, g2, g3, classics });
+        });
+
+        rankedCountRef.current = rankedIds.size;
+      }, [isTV, rankedIds.size]);
+
+      const categories = useMemo(() => {
+        const db = localDb;
+        const genre1 = isTV ? "Drama" : "Horror";
+        const genre2 = isTV ? "Comedy" : "Animation";
+        const genre3Label = isTV ? "Sci-Fi & Fantasy" : "Comedies & Romance";
+        const forYouTitle = isTV ? "Shows You May Like" : "Movies You May Like";
+
+        // Helper: merge local DB results with TMDB results, preferring unranked
+        function mergeResults(localItems, tmdbItems, limit) {
+          const merged = new Map();
+          // Add local unranked first
+          localItems.filter(m => !rankedIds.has(m.id)).forEach(m => merged.set(m.id, m));
+          // Add TMDB unranked
+          (tmdbItems || []).filter(m => !rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
+          // Fill with ranked if needed
+          localItems.filter(m => rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
+          (tmdbItems || []).filter(m => rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
+          return shuffle([...merged.values()].slice(0, limit));
+        }
+
+        const popularIds = isTV ? POPULAR_TV_IDS : POPULAR_MOVIE_IDS;
+        const popularIdSet = new Set(popularIds);
+
+        const cats = [];
+
+        // For You
+        const localForYou = rankedList && rankedList.length >= 3 ? (() => {
           const topHalf = rankedList.slice(0, Math.ceil(rankedList.length / 2));
           const genreCounts = {};
           const decadeCounts = {};
@@ -949,29 +1022,36 @@
           });
           const topGenres = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0]);
           const topDecades = Object.entries(decadeCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => Number(e[0]));
-          const candidates = db.filter(m =>
-            !rankedIds.has(m.id) &&
-            (topGenres.includes(m.genre) || topDecades.includes(Math.floor(parseInt(m.year) / 10) * 10))
-          );
-          forYou = shuffle(candidates).slice(0, 20);
-        }
-
-        const forYouTitle = isTV ? "Shows You May Like" : "Movies You May Like";
-        const cats = [];
+          return db.filter(m => !rankedIds.has(m.id) && (topGenres.includes(m.genre) || topDecades.includes(Math.floor(parseInt(m.year) / 10) * 10)));
+        })() : [];
+        const forYou = mergeResults(localForYou, tmdbCats.forYou, 20);
         if (forYou.length > 0) cats.push({ title: forYouTitle, movies: forYou });
-        cats.push(
-          { title: "Popular", movies: shuffle(popular).slice(0, 20) },
-        );
-        if (acclaimed.length > 0) cats.push({ title: "🏆 Critically Acclaimed", movies: acclaimed });
-        cats.push(
-          { title: "New Releases", movies: shuffle(newReleases).slice(0, 20) },
-          { title: genre1, movies: shuffle(cat1).slice(0, 15) },
-          { title: genre2, movies: shuffle(cat2).slice(0, 15) },
-          { title: genre3Label, movies: shuffle(cat3).slice(0, 15) },
-          { title: "Classics", movies: shuffle(classics).slice(0, 15) },
-        );
+
+        // Popular
+        cats.push({ title: "Popular", movies: mergeResults(db.filter(m => popularIdSet.has(m.id)), tmdbCats.popular, 20) });
+
+        // Critically Acclaimed
+        const localAcclaimed = db.filter(m => m.rating && m.rating >= 8.0);
+        const acclaimedMerged = mergeResults(localAcclaimed, tmdbCats.acclaimed, 20);
+        if (acclaimedMerged.length > 0) cats.push({ title: "🏆 Critically Acclaimed", movies: acclaimedMerged });
+
+        // New Releases
+        cats.push({ title: "New Releases", movies: mergeResults(db.filter(m => parseInt(m.year) >= 2023), tmdbCats.newReleases, 20) });
+
+        // Genre rows
+        cats.push({ title: genre1, movies: mergeResults(db.filter(m => m.genre === genre1), tmdbCats.g1, 15) });
+        cats.push({ title: genre2, movies: mergeResults(db.filter(m => m.genre === genre2), tmdbCats.g2, 15) });
+        cats.push({ title: genre3Label, movies: mergeResults(
+          isTV ? db.filter(m => m.genre === "Sci-Fi & Fantasy") : db.filter(m => m.genre === "Comedy" || m.genre === "Romance"),
+          tmdbCats.g3, 15
+        ) });
+
+        // Classics
+        const classicYear = isTV ? 2005 : 1990;
+        cats.push({ title: "Classics", movies: mergeResults(db.filter(m => parseInt(m.year) <= classicYear), tmdbCats.classics, 15) });
+
         return cats;
-      }, [localDb, isTV, acclaimed, rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map(m => m.id).join(",") : ""]);
+      }, [localDb, isTV, tmdbCats, rankedIds.size, rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map(m => m.id).join(",") : ""]);
 
       return (
         <div className="recs-section">
