@@ -1599,6 +1599,8 @@
           return;
         }
         const s = createSession(movie, targetList);
+        // Store type in session so handleChoice uses the correct list
+        s._isTV = useTV;
         if (s.done) {
           const newList = [...targetList];
           newList.splice(s.insertIndex, 0, movie);
@@ -1611,16 +1613,23 @@
       }
 
       function handleChoice(preferNew) {
+        // Use the session's stored type to ensure correct list is used
+        const sessionIsTV = activeSession._isTV !== undefined ? activeSession._isTV : isTV;
+        const choiceList = sessionIsTV ? tvRankedList : rankedList;
+        const choiceSetList = sessionIsTV ? setTvRankedList : setRankedList;
+        const choiceSetSession = sessionIsTV ? setTvSession : setSession;
+
         const next = recordChoice(activeSession, preferNew);
+        next._isTV = sessionIsTV; // preserve type through comparisons
         if (next.done) {
-          const newList = [...activeList];
+          const newList = [...choiceList];
           newList.splice(next.insertIndex, 0, next.newMovie);
-          setActiveList(newList);
+          choiceSetList(newList);
           const score = getScore(next.insertIndex, newList.length);
           showToast(`"${next.newMovie.title}" ranked #${next.insertIndex + 1} (${score.toFixed(1)})!`);
-          setActiveSession(null);
+          choiceSetSession(null);
         } else {
-          setActiveSession(next);
+          choiceSetSession(next);
         }
       }
 
