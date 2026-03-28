@@ -526,6 +526,93 @@
       .nav-tabs { gap: 2px; }
       .nav-tab { padding: 8px 10px; font-size: 0.8rem; }
       .mode-btn { padding: 6px 14px; font-size: 0.8rem; }
+      .stats-cards { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ─── Stats & Insights ─────────────────────────────────────── */
+    .stats-accordion {
+      margin-top: 24px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--card-bg);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .stats-accordion-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; cursor: pointer; user-select: none;
+      transition: background 0.2s;
+    }
+    .stats-accordion-header:hover { background: rgba(255,255,255,0.04); }
+    .stats-accordion-header h3 {
+      margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .stats-chevron {
+      font-size: 0.8rem; color: var(--text-muted);
+      transition: transform 0.3s ease;
+    }
+    .stats-accordion.open .stats-chevron { transform: rotate(180deg); }
+    .stats-body {
+      max-height: 0; overflow: hidden;
+      transition: max-height 0.4s ease;
+    }
+    .stats-accordion.open .stats-body { max-height: 2000px; }
+    .stats-content { padding: 0 20px 20px; }
+    .stats-cards {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 12px; margin-bottom: 24px;
+    }
+    .stats-card {
+      background: rgba(255,255,255,0.04); border-radius: 10px;
+      padding: 16px; text-align: center;
+    }
+    .stats-card-number {
+      font-size: 1.8rem; font-weight: 700; color: var(--accent);
+      line-height: 1;
+    }
+    .stats-card-label {
+      font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .stats-section-title {
+      font-size: 0.85rem; font-weight: 600; color: var(--text-primary);
+      margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .stats-bar-chart { margin-bottom: 24px; }
+    .stats-bar-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 8px;
+    }
+    .stats-bar-label {
+      width: 80px; font-size: 0.8rem; color: var(--text-muted);
+      text-align: right; flex-shrink: 0;
+    }
+    .stats-bar-track {
+      flex: 1; height: 22px; background: rgba(255,255,255,0.04);
+      border-radius: 6px; overflow: hidden; position: relative;
+    }
+    .stats-bar-fill {
+      height: 100%; border-radius: 6px;
+      background: var(--accent);
+      transition: width 0.5s ease;
+      min-width: 2px;
+    }
+    .stats-bar-count {
+      font-size: 0.75rem; color: var(--text-muted); width: 30px;
+      flex-shrink: 0;
+    }
+    .stats-insights {
+      background: rgba(255,255,255,0.03); border-radius: 10px;
+      padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .stats-insight {
+      font-size: 0.85rem; color: var(--text-secondary);
+      display: flex; align-items: flex-start; gap: 8px;
+    }
+    .stats-insight-icon { flex-shrink: 0; }
+    .stats-empty {
+      text-align: center; padding: 30px; color: var(--text-muted);
+      font-size: 0.9rem;
     }
   </style>
 </head>
@@ -1374,6 +1461,144 @@
       );
     }
 
+    // ─── Stats & Insights ──────────────────────────────────────
+    function StatsView({ rankedList, watchlist, isTV }) {
+      const itemLabel = isTV ? "shows" : "movies";
+      const total = rankedList.length;
+      const wlCount = (watchlist || []).length;
+
+      if (total === 0) {
+        return <div className="stats-empty">Rank some {itemLabel} to see your stats!</div>;
+      }
+
+      // Genre breakdown
+      const genreCounts = {};
+      rankedList.forEach(m => {
+        const genres = (m.genre || "Unknown").split(",").map(g => g.trim());
+        genres.forEach(g => { genreCounts[g] = (genreCounts[g] || 0) + 1; });
+      });
+      const genreSorted = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]);
+      const maxGenre = genreSorted[0] ? genreSorted[0][1] : 1;
+      const topGenre = genreSorted[0] ? genreSorted[0][0] : "N/A";
+
+      // Decade breakdown
+      const decadeCounts = {};
+      rankedList.forEach(m => {
+        const yr = parseInt(m.year);
+        if (!isNaN(yr)) {
+          const decade = Math.floor(yr / 10) * 10 + "s";
+          decadeCounts[decade] = (decadeCounts[decade] || 0) + 1;
+        }
+      });
+      const decadeSorted = Object.entries(decadeCounts).sort((a, b) => {
+        return parseInt(b[0]) - parseInt(a[0]);
+      });
+      const maxDecade = decadeSorted.length ? Math.max(...decadeSorted.map(d => d[1])) : 1;
+
+      // Fun insights
+      const insights = [];
+      if (genreSorted.length > 0) {
+        insights.push({ icon: "🎬", text: `Your #1 genre is ${topGenre} with ${genreSorted[0][1]} ${itemLabel}` });
+      }
+      if (decadeSorted.length > 0) {
+        const topDecade = decadeSorted.reduce((a, b) => a[1] >= b[1] ? a : b);
+        insights.push({ icon: "📅", text: `Most of your ${itemLabel} are from the ${topDecade[0]}` });
+      }
+      // Top 3 diversity
+      if (rankedList.length >= 3) {
+        const top3decades = new Set(rankedList.slice(0, 3).map(m => {
+          const yr = parseInt(m.year);
+          return isNaN(yr) ? null : Math.floor(yr / 10) * 10 + "s";
+        }).filter(Boolean));
+        if (top3decades.size === 3) {
+          insights.push({ icon: "🌟", text: "Your top 3 are all from different decades!" });
+        }
+      }
+      // 21st century percentage
+      const c21 = rankedList.filter(m => parseInt(m.year) >= 2000).length;
+      const pct = Math.round((c21 / total) * 100);
+      insights.push({ icon: "🔮", text: `${pct}% of your list is from the 21st century` });
+      // Unique genres
+      if (genreSorted.length >= 5) {
+        insights.push({ icon: "🎭", text: `You've explored ${genreSorted.length} different genres` });
+      }
+
+      // Bar colors for genres
+      const barColors = [
+        "#e94560", "#00b4d8", "#ffd166", "#06d6a0", "#ef476f",
+        "#118ab2", "#fca311", "#8338ec", "#ff6b6b", "#48bfe3"
+      ];
+
+      return (
+        <div className="stats-content">
+          <div className="stats-cards">
+            <div className="stats-card">
+              <div className="stats-card-number">{total}</div>
+              <div className="stats-card-label">{itemLabel} ranked</div>
+            </div>
+            <div className="stats-card">
+              <div className="stats-card-number">{wlCount}</div>
+              <div className="stats-card-label">on watchlist</div>
+            </div>
+            <div className="stats-card">
+              <div className="stats-card-number">{topGenre}</div>
+              <div className="stats-card-label">top genre</div>
+            </div>
+            <div className="stats-card">
+              <div className="stats-card-number">{genreSorted.length}</div>
+              <div className="stats-card-label">genres</div>
+            </div>
+          </div>
+
+          <h4 className="stats-section-title">Genre Breakdown</h4>
+          <div className="stats-bar-chart">
+            {genreSorted.slice(0, 10).map(([genre, count], i) => (
+              <div className="stats-bar-row" key={genre}>
+                <div className="stats-bar-label">{genre}</div>
+                <div className="stats-bar-track">
+                  <div className="stats-bar-fill" style={{
+                    width: Math.round((count / maxGenre) * 100) + "%",
+                    background: barColors[i % barColors.length],
+                    opacity: 0.85
+                  }} />
+                </div>
+                <div className="stats-bar-count">{count}</div>
+              </div>
+            ))}
+          </div>
+
+          <h4 className="stats-section-title">By Decade</h4>
+          <div className="stats-bar-chart">
+            {decadeSorted.map(([decade, count]) => (
+              <div className="stats-bar-row" key={decade}>
+                <div className="stats-bar-label">{decade}</div>
+                <div className="stats-bar-track">
+                  <div className="stats-bar-fill" style={{
+                    width: Math.round((count / maxDecade) * 100) + "%"
+                  }} />
+                </div>
+                <div className="stats-bar-count">{count}</div>
+              </div>
+            ))}
+          </div>
+
+          {insights.length > 0 && (
+            <>
+              <h4 className="stats-section-title">Insights</h4>
+              <div className="stats-insights">
+                {insights.map((ins, i) => (
+                  <div className="stats-insight" key={i}>
+                    <span className="stats-insight-icon">{ins.icon}</span>
+                    <span>{ins.text}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
     // ─── Toast ──────────────────────────────────────────────────
     function Toast({ message }) {
       if (!message) return null;
@@ -1410,6 +1635,7 @@
       const [authError, setAuthError] = useState("");
       const [tab, setTab] = useState("rank"); // "rank", "community"
       const [viewingUid, setViewingUid] = useState(null);
+      const [statsOpen, setStatsOpen] = useState(false);
       const saveTimerRef = useRef(null);
 
       const isTV = mode === "tv";
@@ -1857,6 +2083,17 @@
               <RankedList list={activeList} onRemove={handleRemove} onClear={handleClear}
                 onMove={handleMove} onShare={handleShare} user={user}
                 itemLabel={isTV ? "TV show" : "movie"} />
+              {activeList.length > 0 && (
+                <div className={`stats-accordion ${statsOpen ? "open" : ""}`}>
+                  <div className="stats-accordion-header" onClick={() => setStatsOpen(o => !o)}>
+                    <h3>📊 Stats & Insights</h3>
+                    <span className="stats-chevron">▼</span>
+                  </div>
+                  <div className="stats-body">
+                    <StatsView rankedList={activeList} watchlist={activeWatchlist} isTV={isTV} />
+                  </div>
+                </div>
+              )}
             </>
           )}
 
