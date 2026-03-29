@@ -1958,6 +1958,7 @@
       const [viewingUid, setViewingUid] = useState(null);
       const [statsOpen, setStatsOpen] = useState(false);
       const saveTimerRef = useRef(null);
+      const syncedRef = useRef(false);
 
       const isTV = mode === "tv";
       const activeList = isTV ? tvRankedList : rankedList;
@@ -2036,6 +2037,7 @@
       useEffect(() => {
         if (!auth) return;
         const unsub = auth.onAuthStateChanged(async (firebaseUser) => {
+          syncedRef.current = false;
           setUser(firebaseUser);
           setAuthLoading(false);
           if (firebaseUser) {
@@ -2074,6 +2076,7 @@
             const tvList = (profile && profile.tvShows && profile.tvShows.length > 0) ? profile.tvShows : tvRankedList;
             backfillRatings(movieList, setRankedList, "movie");
             backfillRatings(tvList, setTvRankedList, "tv");
+            syncedRef.current = true;
           } else {
             // Not signed in — backfill from localStorage
             backfillRatings(rankedList, setRankedList, "movie");
@@ -2108,8 +2111,9 @@
       }, [tvWatchlist]);
 
       // Debounced save to Firestore (saves all lists)
+      // Only saves after initial Firestore sync is complete to prevent overwriting cloud data
       useEffect(() => {
-        if (!user || !db) return;
+        if (!user || !db || !syncedRef.current) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
           saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist);
