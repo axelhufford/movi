@@ -943,7 +943,7 @@
           tvWatchlist: (tvWatchlist || []).map(toSave),
           tvWatchlistCount: (tvWatchlist || []).length,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
       } catch (e) {
         console.error("Failed to save profile:", e);
       }
@@ -2173,6 +2173,12 @@
           return;
         }
         try {
+          // Check if this email is only associated with Google
+          const methods = await auth.fetchSignInMethodsForEmail(authEmail);
+          if (methods.length > 0 && !methods.includes("password") && methods.includes("google.com")) {
+            setAuthError("This email uses Google sign-in. Please use the 'Sign in with Google' button instead.");
+            return;
+          }
           await auth.signInWithEmailAndPassword(authEmail, authPassword);
           setAuthMode(null);
           setAuthEmail(""); setAuthPassword("");
@@ -2194,6 +2200,16 @@
           return;
         }
         try {
+          // Check if this email is already used (e.g. via Google sign-in)
+          const methods = await auth.fetchSignInMethodsForEmail(authEmail);
+          if (methods.length > 0) {
+            if (methods.includes("google.com")) {
+              setAuthError("An account with this email already exists. Please sign in with Google instead.");
+            } else {
+              setAuthError("An account with this email already exists. Try signing in instead.");
+            }
+            return;
+          }
           const cred = await auth.createUserWithEmailAndPassword(authEmail, authPassword);
           await cred.user.updateProfile({ displayName: authDisplayName.trim() });
           // Force refresh so displayName is available immediately
