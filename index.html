@@ -372,6 +372,40 @@
     }
     .comparison-cancel:hover { border-color: var(--accent); color: var(--text); }
 
+    /* Movie Detail Modal */
+    .movie-detail-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85); z-index: 250;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; cursor: pointer;
+    }
+    .day-mode .movie-detail-overlay { background: rgba(0,0,0,0.5); }
+    .movie-detail-box {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+      max-width: 300px; width: 100%; overflow: hidden; cursor: default; position: relative;
+    }
+    .movie-detail-box img, .movie-detail-box .poster-placeholder {
+      width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block;
+    }
+    .movie-detail-info {
+      padding: 16px; text-align: center;
+    }
+    .movie-detail-title {
+      font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.1rem;
+      margin-bottom: 4px;
+    }
+    .movie-detail-year {
+      color: var(--text-muted); font-size: 0.85rem;
+    }
+    .movie-detail-close {
+      position: absolute; top: 10px; right: 10px; z-index: 2;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(0,0,0,0.6); border: none; color: #fff;
+      font-size: 1rem; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; transition: background 0.2s;
+    }
+    .movie-detail-close:hover { background: rgba(0,0,0,0.8); }
+
     /* Ranked List */
     .ranked-section { margin-top: 10px; }
     .ranked-header {
@@ -395,7 +429,7 @@
     .ranked-item {
       display: flex; align-items: center; gap: 12px; padding: 10px 14px;
       background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-      transition: all 0.2s;
+      transition: all 0.2s; cursor: pointer;
     }
     .ranked-item:hover { background: var(--surface2); transform: translateY(-1px); }
     .rank-number {
@@ -1299,7 +1333,7 @@
     }
 
     // ─── Ranked List (with optional read-only mode) ─────────────
-    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel }) {
+    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick }) {
       const [confirmClear, setConfirmClear] = useState(false);
       const total = list.length;
 
@@ -1345,7 +1379,7 @@
             {list.map((movie, i) => {
               const score = getScore(i, total);
               return (
-                <div key={movie.id} className="ranked-item">
+                <div key={movie.id} className="ranked-item" onClick={() => onMovieClick && onMovieClick(movie)}>
                   <div className="rank-number">{i + 1}</div>
                   <Poster poster={movie.poster} title={movie.title}
                     className={movie.poster ? "ranked-poster" : "ranked-poster-ph poster-placeholder"} />
@@ -1476,7 +1510,7 @@
     }
 
     // ─── Profile View (viewing someone else's rankings) ─────────
-    function ProfileView({ uid, onBack, onAddMovie, onBookmark, rankedIds, tvRankedIds, watchlistIds, tvWatchlistIds, defaultTab, isAdmin, onTabChange }) {
+    function ProfileView({ uid, onBack, onAddMovie, onBookmark, rankedIds, tvRankedIds, watchlistIds, tvWatchlistIds, defaultTab, isAdmin, onTabChange, onMovieClick }) {
       const [profile, setProfile] = useState(null);
       const [loading, setLoading] = useState(true);
       const [profileTab, setProfileTab] = useState(defaultTab || "movies");
@@ -1599,12 +1633,14 @@
               onAddMovie={(movie) => onAddMovie(movie, profileTab === "tv" ? "tv" : "movies")}
               onBookmark={(movie) => onBookmark(movie, profileTab === "tv" ? "tv" : "movies")}
               rankedIds={activeIds} watchlistIds={activeWlIds}
+              onMovieClick={onMovieClick}
               itemLabel={profileTab === "tv" ? "TV show" : "movie"} />
           ) : (
             <RankedList list={activeList} readOnly={true}
               onAddMovie={(movie) => onAddMovie(movie, profileTab === "tv" ? "tv" : "movies")}
               onBookmark={(movie) => onBookmark(movie, profileTab === "tv" ? "tv" : "movies")}
               rankedIds={activeIds} watchlistIds={activeWlIds}
+              onMovieClick={onMovieClick}
               itemLabel={profileTab === "tv" ? "TV show" : "movie"} />
           )}
         </div>
@@ -1842,6 +1878,26 @@
       return <div className="toast">{message}</div>;
     }
 
+    function MovieDetail({ movie, onClose }) {
+      if (!movie) return null;
+      return (
+        <div className="movie-detail-overlay" onClick={onClose}>
+          <div className="movie-detail-box" onClick={e => e.stopPropagation()}>
+            <button className="movie-detail-close" onClick={onClose}>&#x2715;</button>
+            <Poster poster={movie.poster} title={movie.title}
+              className={movie.poster ? "" : "poster-placeholder"}
+              style={{width:"100%",aspectRatio:"2/3",objectFit:"cover",display:"block",borderRadius:0}} />
+            <div className="movie-detail-info">
+              <div className="movie-detail-title">{movie.title}</div>
+              <div className="movie-detail-year">
+                {movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // ─── App ────────────────────────────────────────────────────
     function App() {
       const [mode, setMode] = useState(() => {
@@ -1864,6 +1920,7 @@
       const [session, setSession] = useState(null);
       const [tvSession, setTvSession] = useState(null);
       const [toast, setToast] = useState("");
+      const [detailMovie, setDetailMovie] = useState(null);
       const [user, setUser] = useState(null);
       const [authLoading, setAuthLoading] = useState(FIREBASE_READY);
       const [authMode, setAuthMode] = useState(null); // null, "signin", "signup"
@@ -2302,10 +2359,12 @@
                 watchlistIds={watchlistIds} tvWatchlistIds={tvWatchlistIds}
                 defaultTab={isTV ? "tv" : "movies"}
                 isAdmin={user && user.uid === ADMIN_UID}
-                onTabChange={(tab) => setMode(tab === "tv" ? "tv" : "movies")} />
+                onTabChange={(tab) => setMode(tab === "tv" ? "tv" : "movies")}
+                onMovieClick={setDetailMovie} />
               <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
                 onWatchlist={handleAddToWatchlistFromComparison}
                 itemLabel={isTV ? "TV show" : "movie"} />
+              <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)} />
               <Toast message={toast} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
                 <div style={{color:"var(--text-muted)",fontSize:"12px",marginBottom:"8px"}}>a website by Axel Hufford</div>
@@ -2391,6 +2450,7 @@
                 localDb={isTV ? TV_DB : MOVIE_DB} mode={mode} />
               <RankedList list={activeList} onRemove={handleRemove} onClear={handleClear}
                 onMove={handleMove} onShare={handleShare} user={user}
+                onMovieClick={setDetailMovie}
                 itemLabel={isTV ? "TV show" : "movie"} />
               {activeList.length > 0 && (
                 <div className={`stats-accordion ${statsOpen ? "open" : ""}`}>
