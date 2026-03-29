@@ -992,8 +992,20 @@
           .orderBy("updatedAt", "desc")
           .limit(50)
           .get();
-        return snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+        const all = snap.docs.map(d => ({ uid: d.id, ...d.data() }))
           .filter(p => (p.movieCount || 0) > 0 || (p.tvShowCount || 0) > 0);
+        // Deduplicate by displayName — keep the one with the most rankings (likely the real account)
+        const byName = new Map();
+        all.forEach(p => {
+          const name = (p.displayName || "").toLowerCase().trim();
+          const existing = byName.get(name);
+          const total = (p.movieCount || 0) + (p.tvShowCount || 0);
+          const existingTotal = existing ? (existing.movieCount || 0) + (existing.tvShowCount || 0) : 0;
+          if (!existing || total > existingTotal) {
+            byName.set(name, p);
+          }
+        });
+        return Array.from(byName.values());
       } catch (e) {
         console.error("Failed to load community:", e);
         return [];
@@ -2130,6 +2142,7 @@
         if (!auth) return;
         try {
           const provider = new firebase.auth.GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: "select_account" });
           // Try popup first, fall back to redirect for browsers that block popups
           try {
             await auth.signInWithPopup(provider);
