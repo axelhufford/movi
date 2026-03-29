@@ -252,6 +252,11 @@
       width: 28px; height: 42px; border-radius: 4px; object-fit: cover;
     }
     .community-card-arrow { color: var(--text-muted); font-size: 1.2rem; flex-shrink: 0; }
+    .community-delete-btn {
+      background: none; border: none; font-size: 1rem; cursor: pointer;
+      opacity: 0.4; transition: opacity 0.2s; padding: 4px 8px; flex-shrink: 0;
+    }
+    .community-delete-btn:hover { opacity: 1; }
 
     /* Search */
     .search-section { position: relative; margin-bottom: 24px; }
@@ -971,6 +976,15 @@
       }
     }
 
+    async function deleteProfile(uid) {
+      if (!db) return;
+      try {
+        await db.collection("profiles").doc(uid).delete();
+      } catch (e) {
+        console.error("Failed to delete profile:", e);
+      }
+    }
+
     async function loadCommunityProfiles() {
       if (!db) return [];
       try {
@@ -1431,7 +1445,7 @@
     }
 
     // ─── Community View ─────────────────────────────────────────
-    function CommunityView({ onViewProfile, currentUid }) {
+    function CommunityView({ onViewProfile, currentUid, isAdmin }) {
       const [profiles, setProfiles] = useState([]);
       const [loading, setLoading] = useState(true);
 
@@ -1502,6 +1516,18 @@
                   )}
                 </div>
                 <div className="community-card-arrow">&#x203A;</div>
+                {isAdmin && (
+                  <button className="community-delete-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Delete ${p.displayName || "this user"}'s profile?`)) {
+                        deleteProfile(p.uid).then(() => {
+                          setProfiles(prev => prev.filter(pr => pr.uid !== p.uid));
+                        });
+                      }
+                    }}
+                    title="Delete profile">&#x1F5D1;</button>
+                )}
               </div>
             ))}
           </div>
@@ -2506,7 +2532,8 @@
           )}
 
           {tab === "community" && (
-            <CommunityView onViewProfile={handleViewProfile} currentUid={user ? user.uid : null} />
+            <CommunityView onViewProfile={handleViewProfile} currentUid={user ? user.uid : null}
+              isAdmin={user && user.uid === ADMIN_UID} />
           )}
 
           <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
