@@ -434,9 +434,16 @@
     .ranked-item {
       display: flex; align-items: center; gap: 12px; padding: 10px 14px;
       background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-      transition: all 0.2s; cursor: pointer;
+      transition: all 0.2s; cursor: pointer; position: relative;
     }
     .ranked-item:hover { background: var(--surface2); transform: translateY(-1px); }
+    .ranked-list.is-dragging .ranked-item { transition: none; }
+    .ranked-list.is-dragging .ranked-item:hover { background: var(--surface); transform: none; }
+    .ranked-item.dragging-source { opacity: 0.25; transform: none !important; }
+    .ranked-item.drop-before::before {
+      content: ''; position: absolute; top: -4px; left: 0; right: 0;
+      height: 3px; background: var(--accent); border-radius: 2px; z-index: 10;
+    }
     .rank-number {
       font-family: 'Outfit', sans-serif;
       font-size: 1.3rem; font-weight: 800; min-width: 32px; text-align: center;
@@ -457,16 +464,18 @@
     .score-high { background: rgba(76, 175, 80, 0.2); color: #66bb6a; }
     .score-mid { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
     .score-low { background: rgba(244, 67, 54, 0.2); color: #ef5350; }
-    .move-btns {
-      display: flex; flex-direction: column; gap: 1px; flex-shrink: 0;
+    .drag-handle {
+      display: flex; align-items: center; justify-content: center;
+      color: #555; font-size: 1.2rem; padding: 8px 4px;
+      cursor: grab; flex-shrink: 0; touch-action: none;
+      user-select: none; -webkit-user-select: none;
+      min-width: 28px; min-height: 44px; border-radius: 6px;
+      transition: color 0.2s;
     }
-    .move-btn {
-      background: none; border: none; color: #555; cursor: pointer;
-      font-size: 0.7rem; padding: 2px 6px; transition: color 0.2s; border-radius: 4px;
-      line-height: 1;
-    }
-    .move-btn:hover { color: var(--gold); }
-    .move-btn:disabled { opacity: 0.15; cursor: default; }
+    .drag-handle:hover { color: var(--text-muted); }
+    .drag-handle:active { cursor: grabbing; }
+    .day-mode .drag-handle { color: #bbb; }
+    .day-mode .drag-handle:hover { color: #888; }
     .remove-btn {
       background: none; border: none; color: #444; cursor: pointer;
       font-size: 1rem; padding: 4px 6px; transition: color 0.2s; border-radius: 6px;
@@ -1361,7 +1370,141 @@
     // ─── Ranked List (with optional read-only mode) ─────────────
     function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick }) {
       const [confirmClear, setConfirmClear] = useState(false);
+      const [dragIndex, setDragIndex] = useState(null);
+      const [overIndex, setOverIndex] = useState(null);
+      const listRef = useRef(null);
+      const isDraggingRef = useRef(false);
+      const startPosRef = useRef({ x: 0, y: 0, index: null });
+      const cloneRef = useRef(null);
+      const scrollIntervalRef = useRef(null);
+      const itemRectsRef = useRef([]);
+      const lastClientYRef = useRef(0);
       const total = list.length;
+
+      useEffect(() => {
+        return () => {
+          if (cloneRef.current) { cloneRef.current.remove(); cloneRef.current = null; }
+          if (scrollIntervalRef.current) { clearInterval(scrollIntervalRef.current); scrollIntervalRef.current = null; }
+        };
+      }, []);
+
+      function computeOverIndex(clientY) {
+        if (!listRef.current) return null;
+        var listTop = listRef.current.getBoundingClientRect().top;
+        var relY = clientY - listTop + listRef.current.scrollTop;
+        var rects = itemRectsRef.current;
+        for (var r = 0; r < rects.length; r++) {
+          var mid = rects[r].top + rects[r].height / 2;
+          if (relY < mid) return r;
+        }
+        return rects.length;
+      }
+
+      function startAutoScroll(clientY) {
+        if (scrollIntervalRef.current) return;
+        scrollIntervalRef.current = setInterval(function() {
+          var y = lastClientYRef.current;
+          var edge = 60;
+          if (y < edge) {
+            var speed = Math.round(2 + 6 * (1 - y / edge));
+            window.scrollBy(0, -speed);
+          } else if (y > window.innerHeight - edge) {
+            var dist = y - (window.innerHeight - edge);
+            var speed2 = Math.round(2 + 6 * (dist / edge));
+            window.scrollBy(0, speed2);
+          }
+        }, 16);
+      }
+
+      function stopAutoScroll() {
+        if (scrollIntervalRef.current) { clearInterval(scrollIntervalRef.current); scrollIntervalRef.current = null; }
+      }
+
+      function removeClone() {
+        if (cloneRef.current) { cloneRef.current.remove(); cloneRef.current = null; }
+      }
+
+      function handleDragStart(e, index) {
+        if (e.target.closest && e.target.closest("button")) return;
+        startPosRef.current = { x: e.clientX, y: e.clientY, index: index };
+        isDraggingRef.current = false;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      }
+
+      function handleDragMove(e) {
+        var sp = startPosRef.current;
+        if (sp.index === null) return;
+
+        if (!isDraggingRef.current) {
+          var dx = Math.abs(e.clientX - sp.x);
+          var dy = Math.abs(e.clientY - sp.y);
+          if (dx + dy < 5) return;
+          isDraggingRef.current = true;
+          setDragIndex(sp.index);
+
+          // Cache item rects relative to list container
+          if (listRef.current) {
+            var items = listRef.current.querySelectorAll(".ranked-item");
+            var listTop = listRef.current.getBoundingClientRect().top;
+            itemRectsRef.current = Array.from(items).map(function(el) {
+              var r = el.getBoundingClientRect();
+              return { top: r.top - listTop + listRef.current.scrollTop, height: r.height };
+            });
+          }
+
+          // Create floating clone
+          var items2 = listRef.current.querySelectorAll(".ranked-item");
+          var srcEl = items2[sp.index];
+          if (srcEl) {
+            var rect = srcEl.getBoundingClientRect();
+            var clone = srcEl.cloneNode(true);
+            clone.style.cssText = "position:fixed;z-index:9999;pointer-events:none;width:" +
+              rect.width + "px;left:" + rect.left + "px;top:" + rect.top + "px;opacity:0.92;" +
+              "box-shadow:0 8px 32px rgba(0,0,0,0.35);transform:scale(1.02);border-radius:14px;" +
+              "transition:none;background:var(--surface);border:1px solid var(--accent);";
+            document.body.appendChild(clone);
+            cloneRef.current = clone;
+            startPosRef.current.offsetY = e.clientY - rect.top;
+          }
+          startAutoScroll(e.clientY);
+        }
+
+        if (isDraggingRef.current) {
+          lastClientYRef.current = e.clientY;
+          if (cloneRef.current) {
+            cloneRef.current.style.top = (e.clientY - (startPosRef.current.offsetY || 0)) + "px";
+          }
+          var newOver = computeOverIndex(e.clientY);
+          setOverIndex(function(prev) { return newOver !== prev ? newOver : prev; });
+        }
+      }
+
+      function handleDragEnd(e) {
+        if (isDraggingRef.current && startPosRef.current.index !== null && onMove) {
+          var from = startPosRef.current.index;
+          var to = overIndex;
+          if (to !== null && to !== from && to !== from + 1) {
+            var target = to > from ? to - 1 : to;
+            onMove(from, target);
+          }
+        }
+        removeClone();
+        stopAutoScroll();
+        setDragIndex(null);
+        setOverIndex(null);
+        isDraggingRef.current = false;
+        startPosRef.current = { x: 0, y: 0, index: null };
+      }
+
+      function handleDragCancel(e) {
+        removeClone();
+        stopAutoScroll();
+        setDragIndex(null);
+        setOverIndex(null);
+        isDraggingRef.current = false;
+        startPosRef.current = { x: 0, y: 0, index: null };
+      }
 
       if (total === 0 && !readOnly) {
         return (
@@ -1401,11 +1544,14 @@
               </div>
             )}
           </div>
-          <div className="ranked-list">
+          <div className={"ranked-list" + (dragIndex !== null ? " is-dragging" : "")} ref={listRef}>
             {list.map((movie, i) => {
               const score = getScore(i, total);
+              var itemClass = "ranked-item";
+              if (dragIndex === i) itemClass += " dragging-source";
+              if (overIndex === i && overIndex !== dragIndex) itemClass += " drop-before";
               return (
-                <div key={movie.id} className="ranked-item" onClick={() => onMovieClick && onMovieClick(movie)}>
+                <div key={movie.id} className={itemClass} onClick={() => onMovieClick && onMovieClick(movie)}>
                   <div className="rank-number">{i + 1}</div>
                   <Poster poster={movie.poster} title={movie.title}
                     className={movie.poster ? "ranked-poster" : "ranked-poster-ph poster-placeholder"} />
@@ -1414,13 +1560,15 @@
                     <div className="ranked-item-year">{movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}</div>
                   </div>
                   <div className={`score-badge ${scoreClass(score)}`}>{score.toFixed(1)}</div>
-                  {!readOnly && (
-                    <div className="move-btns">
-                      <button className="move-btn" disabled={i === 0} onClick={() => onMove(i, i - 1)} title="Move up">&#x25B2;</button>
-                      <button className="move-btn" disabled={i === total - 1} onClick={() => onMove(i, i + 1)} title="Move down">&#x25BC;</button>
-                    </div>
+                  {!readOnly && onMove && (
+                    <div className="drag-handle"
+                      onPointerDown={(e) => handleDragStart(e, i)}
+                      onPointerMove={handleDragMove}
+                      onPointerUp={handleDragEnd}
+                      onPointerCancel={handleDragCancel}
+                      title="Drag to reorder">&#x2807;</div>
                   )}
-                  {!readOnly && <button className="remove-btn" onClick={() => onRemove(movie.id)} title="Remove">&#x2715;</button>}
+                  {!readOnly && <button className="remove-btn" onClick={(e) => { e.stopPropagation(); onRemove(movie.id); }} title="Remove">&#x2715;</button>}
                   {onBookmark && (
                     <button className={`bookmark-btn ${watchlistIds && watchlistIds.has(movie.id) ? "bookmarked" : ""}`}
                       disabled={watchlistIds && watchlistIds.has(movie.id) || (rankedIds && rankedIds.has(movie.id))}
