@@ -1667,11 +1667,10 @@
           // Compute compatibility scores and sort
           const hasMyRankings = (myMovies && myMovies.length > 0) || (myTv && myTv.length > 0);
           if (hasMyRankings) {
-            filtered = filtered.map(pr => {
-              const compat = computeCompatibility(myMovies || [], myTv || [], pr.movies || [], pr.tvShows || []);
-              console.log("Compatibility with", pr.displayName, ":", compat, "| their movies:", (pr.movies || []).length, "| my movies:", (myMovies || []).length);
-              return { ...pr, compatibility: compat };
-            });
+            filtered = filtered.map(pr => ({
+              ...pr,
+              compatibility: computeCompatibility(myMovies || [], myTv || [], pr.movies || [], pr.tvShows || [])
+            }));
             filtered.sort((a, b) => {
               if (a.compatibility !== null && b.compatibility !== null) return b.compatibility - a.compatibility;
               if (a.compatibility !== null) return -1;
