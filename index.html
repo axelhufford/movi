@@ -260,6 +260,17 @@
     .compatibility-high { background: var(--accent); color: #fff; }
     .compatibility-mid { background: #b8860b; color: #fff; }
     .compatibility-low { background: var(--surface2); color: var(--text-muted); font-weight: 600; }
+    .compatibility-badge:active { transform: scale(0.95); }
+    .compat-explainer {
+      background: var(--surface); border: 1px solid var(--accent); border-radius: 12px;
+      padding: 14px 18px; margin-bottom: 12px; font-size: 0.8rem;
+      color: var(--text); line-height: 1.5; position: relative;
+      animation: fadeIn 0.2s;
+    }
+    .compat-explainer-close {
+      position: absolute; top: 6px; right: 10px; background: none; border: none;
+      color: var(--text-muted); cursor: pointer; font-size: 1rem;
+    }
     .community-delete-btn {
       background: none; border: none; font-size: 1rem; cursor: pointer;
       opacity: 0.4; transition: opacity 0.2s; padding: 4px 8px; flex-shrink: 0;
@@ -1660,6 +1671,7 @@
     function CommunityView({ onViewProfile, currentUid, isAdmin, myMovies, myTv }) {
       const [profiles, setProfiles] = useState([]);
       const [loading, setLoading] = useState(true);
+      const [showExplainer, setShowExplainer] = useState(false);
 
       useEffect(() => {
         loadCommunityProfiles().then(p => {
@@ -1717,6 +1729,12 @@
 
       return (
         <div className="community-section">
+          {showExplainer && (
+            <div className="compat-explainer">
+              <button className="compat-explainer-close" onClick={() => setShowExplainer(false)}>&times;</button>
+              Compatibility % is based on how many movies you have in common and how similarly you ranked them. Higher % = more similar taste!
+            </div>
+          )}
           <div className="community-list">
             {profiles.map(p => (
               <div key={p.uid} className="community-card" onClick={() => onViewProfile(p.uid)}>
@@ -1743,12 +1761,14 @@
                   )}
                 </div>
                 {p.compatibility !== undefined && p.compatibility !== null && (
-                  <div className={`compatibility-badge ${p.compatibility >= 70 ? "compatibility-high" : p.compatibility >= 40 ? "compatibility-mid" : "compatibility-low"}`}>
+                  <div className={`compatibility-badge ${p.compatibility >= 70 ? "compatibility-high" : p.compatibility >= 40 ? "compatibility-mid" : "compatibility-low"}`}
+                    onClick={(e) => { e.stopPropagation(); setShowExplainer(prev => !prev); }}>
                     {p.compatibility}%
                   </div>
                 )}
                 {p.compatibility === null && (myMovies && myMovies.length > 0 || myTv && myTv.length > 0) && (
-                  <div className="compatibility-badge compatibility-low">—</div>
+                  <div className="compatibility-badge compatibility-low"
+                    onClick={(e) => { e.stopPropagation(); setShowExplainer(prev => !prev); }}>—</div>
                 )}
                 <div className="community-card-arrow">&#x203A;</div>
                 {isAdmin && (
