@@ -981,7 +981,6 @@
     async function saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist, isPrivate) {
       if (!db || !user) return;
       try {
-        console.warn("saveProfile called for", user.uid, "with", rankedList.length, "movies");
         const toSave = m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster, rating: m.rating || null });
         await db.collection("profiles").doc(user.uid).set({
           displayName: user.displayName || "Anonymous",
@@ -2395,11 +2394,9 @@
       // Debounced save to Firestore (saves all lists)
       // Only saves after initial Firestore sync is complete to prevent overwriting cloud data
       useEffect(() => {
-        console.warn("Save effect:", { hasUser: !!user, hasDb: !!db, synced: syncedRef.current, movies: rankedList.length });
         if (!user || !db || !syncedRef.current) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-          console.warn("Actually saving profile now...", { movies: rankedList.length });
           saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist, isPrivate);
         }, 1500);
         return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
