@@ -179,6 +179,13 @@
       font-size: 0.8rem; transition: all 0.2s; display: flex; align-items: center; gap: 6px;
     }
     .share-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .private-toggle {
+      padding: 6px 14px; background: none; border: 1px solid #444;
+      color: var(--text-muted); border-radius: 8px; cursor: pointer;
+      font-size: 0.8rem; transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+    }
+    .private-toggle:hover { border-color: var(--accent); color: var(--accent); }
+    .private-toggle.active { border-color: var(--gold); color: var(--gold); }
 
     /* Profile View (viewing someone else's rankings) */
     .profile-banner {
@@ -260,12 +267,13 @@
     .compatibility-high { background: var(--accent); color: #fff; }
     .compatibility-mid { background: #b8860b; color: #fff; }
     .compatibility-low { background: var(--surface2); color: var(--text-muted); font-weight: 600; }
+    .compatibility-badge { cursor: pointer; }
     .compatibility-badge:active { transform: scale(0.95); }
     .compat-explainer {
       background: var(--surface); border: 1px solid var(--accent); border-radius: 12px;
       padding: 14px 18px; margin-bottom: 12px; font-size: 0.8rem;
       color: var(--text); line-height: 1.5; position: relative;
-      animation: fadeIn 0.2s;
+      animation: fadeInUp 0.2s;
     }
     .compat-explainer-close {
       position: absolute; top: 6px; right: 10px; background: none; border: none;
@@ -970,7 +978,7 @@
     }
 
     // ─── Firestore Helpers ──────────────────────────────────────
-    async function saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist) {
+    async function saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist, isPrivate) {
       if (!db || !user) return;
       try {
         const toSave = m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster, rating: m.rating || null });
@@ -985,6 +993,7 @@
           watchlistCount: (watchlist || []).length,
           tvWatchlist: (tvWatchlist || []).map(toSave),
           tvWatchlistCount: (tvWatchlist || []).length,
+          isPrivate: !!isPrivate,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
       } catch (e) {
@@ -1431,7 +1440,7 @@
     }
 
     // ─── Ranked List (with optional read-only mode) ─────────────
-    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick }) {
+    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate }) {
       const [confirmClear, setConfirmClear] = useState(false);
       const [dragIndex, setDragIndex] = useState(null);
       const [overIndex, setOverIndex] = useState(null);
@@ -1598,6 +1607,11 @@
             <h2>{readOnly ? "Rankings" : "Your Rankings"} ({total})</h2>
             {!readOnly && (
               <div className="ranked-header-btns">
+                {user && onTogglePrivate && (
+                  <button className={`private-toggle ${isPrivate ? "active" : ""}`} onClick={onTogglePrivate}>
+                    {isPrivate ? "\uD83D\uDD12" : "\uD83D\uDD13"}
+                  </button>
+                )}
                 {user && onShare && (
                   <button className="share-btn" onClick={onShare}>
                     <span>&#x1F517;</span> Share
@@ -1743,7 +1757,7 @@
                   : <div className="community-card-avatar-ph">{(p.displayName || "?")[0]}</div>
                 }
                 <div className="community-card-info">
-                  <div className="community-card-name">{p.displayName || "Anonymous"}</div>
+                  <div className="community-card-name">{p.displayName || "Anonymous"}{isAdmin && p.isPrivate ? " \uD83D\uDD12" : ""}</div>
                   <div className="community-card-meta">
                     {(p.movieCount || 0) > 0 && `${p.movieCount} movies`}
                     {(p.movieCount || 0) > 0 && (p.tvShowCount || 0) > 0 && " · "}
@@ -1886,7 +1900,7 @@
               : <div className="profile-avatar-ph">{(profile.displayName || "?")[0]}</div>
             }
             <div className="profile-name">{profile.displayName || "Anonymous"}</div>
-            {isAdmin && <div style={{color:"var(--gold)",fontSize:"0.75rem",fontWeight:600,marginBottom:4}}>ADMIN MODE</div>}
+            {isAdmin && <div style={{color:"var(--gold)",fontSize:"0.75rem",fontWeight:600,marginBottom:4}}>ADMIN MODE{profile.isPrivate ? " \uD83D\uDD12 Private" : ""}</div>}
             <div className="profile-count">
               {movieList.length > 0 && `${movieList.length} movies`}
               {movieList.length > 0 && tvList.length > 0 && " · "}
@@ -1916,6 +1930,12 @@
               rankedIds={activeIds} watchlistIds={activeWlIds}
               onMovieClick={onMovieClick}
               itemLabel={profileTab === "tv" ? "TV show" : "movie"} />
+          ) : profile.isPrivate ? (
+            <div style={{textAlign:"center",padding:"60px 20px",color:"var(--text-muted)"}}>
+              <div style={{fontSize:"2.5rem",marginBottom:12}}>{"\uD83D\uDD12"}</div>
+              <div style={{fontSize:"1rem",fontWeight:600,marginBottom:6}}>Rankings are private</div>
+              <div style={{fontSize:"0.8rem"}}>This user has chosen to keep their rankings hidden.</div>
+            </div>
           ) : (
             <RankedList list={activeList} readOnly={true}
               onAddMovie={(movie) => onAddMovie(movie, profileTab === "tv" ? "tv" : "movies")}
@@ -2186,6 +2206,7 @@
         return params.get("type") === "tv" ? "tv" : "movies";
       });
       const [dayMode, setDayMode] = useState(() => localStorage.getItem("movi-daymode") === "true");
+      const [isPrivate, setIsPrivate] = useState(() => localStorage.getItem("movi-private") === "true");
       const [rankedList, setRankedList] = useState(() => {
         try { return JSON.parse(localStorage.getItem("movi-ranked-list")) || []; } catch { return []; }
       });
@@ -2326,6 +2347,11 @@
                 }
               }
             }
+            // Sync private mode setting
+            if (profile.isPrivate !== undefined) {
+              setIsPrivate(!!profile.isPrivate);
+              localStorage.setItem("movi-private", profile.isPrivate ? "true" : "false");
+            }
             // Backfill ratings after Firestore sync
             const movieList = (profile && profile.movies && profile.movies.length > 0) ? profile.movies : rankedList;
             const tvList = (profile && profile.tvShows && profile.tvShows.length > 0) ? profile.tvShows : tvRankedList;
@@ -2371,10 +2397,17 @@
         if (!user || !db || !syncedRef.current) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(() => {
-          saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist);
+          saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist, isPrivate);
         }, 1500);
         return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-      }, [rankedList, tvRankedList, watchlist, tvWatchlist, user]);
+      }, [rankedList, tvRankedList, watchlist, tvWatchlist, user, isPrivate]);
+
+      function handleTogglePrivate() {
+        const next = !isPrivate;
+        setIsPrivate(next);
+        localStorage.setItem("movi-private", next ? "true" : "false");
+        showToast(next ? "Rankings set to private" : "Rankings set to public");
+      }
 
       function showToast(msg) {
         setToast(msg);
@@ -2753,6 +2786,7 @@
               <RankedList list={activeList} onRemove={handleRemove} onClear={handleClear}
                 onMove={handleMove} onShare={handleShare} user={user}
                 onMovieClick={setDetailMovie}
+                isPrivate={isPrivate} onTogglePrivate={handleTogglePrivate}
                 itemLabel={isTV ? "TV show" : "movie"} />
               {activeList.length > 0 && (
                 <div className={`stats-accordion ${statsOpen ? "open" : ""}`}>
