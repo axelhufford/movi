@@ -2348,7 +2348,7 @@
               }
             }
             // Sync private mode setting
-            if (profile.isPrivate !== undefined) {
+            if (profile && profile.isPrivate !== undefined) {
               setIsPrivate(!!profile.isPrivate);
               localStorage.setItem("movi-private", profile.isPrivate ? "true" : "false");
             }
