@@ -252,6 +252,14 @@
       width: 28px; height: 42px; border-radius: 4px; object-fit: cover;
     }
     .community-card-arrow { color: var(--text-muted); font-size: 1.2rem; flex-shrink: 0; }
+    .compatibility-badge {
+      font-size: 0.7rem; font-weight: 700; padding: 4px 8px;
+      border-radius: 12px; flex-shrink: 0; text-align: center;
+      min-width: 36px; line-height: 1;
+    }
+    .compatibility-high { background: var(--accent); color: #fff; }
+    .compatibility-mid { background: #b8860b; color: #fff; }
+    .compatibility-low { background: var(--surface2); color: var(--text-muted); font-weight: 600; }
     .community-delete-btn {
       background: none; border: none; font-size: 1rem; cursor: pointer;
       opacity: 0.4; transition: opacity 0.2s; padding: 4px 8px; flex-shrink: 0;
@@ -1009,6 +1017,35 @@
       }
     }
 
+    // ─── Compatibility Score ──────────────────────────────────
+    function computeListCompatibility(myList, theirList) {
+      if (!myList || !theirList || myList.length < 2 || theirList.length < 2) return null;
+      const myMap = {};
+      myList.forEach((m, i) => { myMap[m.id] = i / myList.length; });
+      const theirMap = {};
+      theirList.forEach((m, i) => { theirMap[m.id] = i / theirList.length; });
+      const sharedIds = Object.keys(myMap).filter(id => id in theirMap);
+      if (sharedIds.length < 2) return { score: null, shared: 0 };
+      const rankDiffs = sharedIds.map(id => Math.abs(myMap[id] - theirMap[id]));
+      const avgSimilarity = 1 - rankDiffs.reduce((a, b) => a + b, 0) / rankDiffs.length;
+      const overlapRatio = sharedIds.length / Math.min(myList.length, theirList.length);
+      const score = (avgSimilarity * 0.6 + Math.min(overlapRatio, 1) * 0.4) * 100;
+      return { score: Math.round(score), shared: sharedIds.length };
+    }
+
+    function computeCompatibility(myMovies, myTv, theirMovies, theirTv) {
+      const movieResult = computeListCompatibility(myMovies, theirMovies);
+      const tvResult = computeListCompatibility(myTv, theirTv);
+      const movieShared = movieResult ? movieResult.shared : 0;
+      const tvShared = tvResult ? tvResult.shared : 0;
+      const totalShared = movieShared + tvShared;
+      if (totalShared < 2) return null;
+      const movieScore = movieResult && movieResult.score !== null ? movieResult.score : 0;
+      const tvScore = tvResult && tvResult.score !== null ? tvResult.score : 0;
+      const blended = (movieScore * movieShared + tvScore * tvShared) / totalShared;
+      return Math.round(blended);
+    }
+
     async function loadCommunityProfiles() {
       if (!db) return [];
       try {
@@ -1620,16 +1657,30 @@
     }
 
     // ─── Community View ─────────────────────────────────────────
-    function CommunityView({ onViewProfile, currentUid, isAdmin }) {
+    function CommunityView({ onViewProfile, currentUid, isAdmin, myMovies, myTv }) {
       const [profiles, setProfiles] = useState([]);
       const [loading, setLoading] = useState(true);
 
       useEffect(() => {
         loadCommunityProfiles().then(p => {
-          setProfiles(p.filter(pr => pr.uid !== currentUid));
+          let filtered = p.filter(pr => pr.uid !== currentUid);
+          // Compute compatibility scores and sort
+          if (myMovies && myMovies.length > 0 || myTv && myTv.length > 0) {
+            filtered = filtered.map(pr => ({
+              ...pr,
+              compatibility: computeCompatibility(myMovies || [], myTv || [], pr.movies || [], pr.tvShows || [])
+            }));
+            filtered.sort((a, b) => {
+              if (a.compatibility !== null && b.compatibility !== null) return b.compatibility - a.compatibility;
+              if (a.compatibility !== null) return -1;
+              if (b.compatibility !== null) return 1;
+              return 0;
+            });
+          }
+          setProfiles(filtered);
           setLoading(false);
         });
-      }, [currentUid]);
+      }, [currentUid, myMovies, myTv]);
 
       if (!FIREBASE_READY) {
         return (
@@ -1690,6 +1741,14 @@
                     </div>
                   )}
                 </div>
+                {p.compatibility !== undefined && p.compatibility !== null && (
+                  <div className={`compatibility-badge ${p.compatibility >= 70 ? "compatibility-high" : p.compatibility >= 40 ? "compatibility-mid" : "compatibility-low"}`}>
+                    {p.compatibility}%
+                  </div>
+                )}
+                {p.compatibility === null && (myMovies && myMovies.length > 0 || myTv && myTv.length > 0) && (
+                  <div className="compatibility-badge compatibility-low">—</div>
+                )}
                 <div className="community-card-arrow">&#x203A;</div>
                 {isAdmin && (
                   <button className="community-delete-btn"
@@ -2729,7 +2788,8 @@
 
           {tab === "community" && (
             <CommunityView onViewProfile={handleViewProfile} currentUid={user ? user.uid : null}
-              isAdmin={user && user.uid === ADMIN_UID} />
+              isAdmin={user && user.uid === ADMIN_UID}
+              myMovies={rankedList} myTv={tvRankedList} />
           )}
 
           <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
