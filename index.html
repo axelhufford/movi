@@ -2858,12 +2858,6 @@
                 onWatchlist={handleAddToWatchlistFromComparison}
                 itemLabel={isTV ? "TV show" : "movie"} />
               <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)} />
-              {showImport && (
-                <LetterboxdImport
-                  onImport={handleLetterboxdImport}
-                  onClose={() => setShowImport(false)}
-                  existingCount={rankedList.length} />
-              )}
               <Toast message={toast} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
                 <div style={{color:"var(--text-muted)",fontSize:"12px",marginBottom:"8px"}}>a website by Axel Hufford</div>
@@ -3015,6 +3009,12 @@
           <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
             onWatchlist={handleAddToWatchlistFromComparison}
             itemLabel={isTV ? "TV show" : "movie"} />
+          {showImport && (
+            <LetterboxdImport
+              onImport={handleLetterboxdImport}
+              onClose={() => setShowImport(false)}
+              existingCount={rankedList.length} />
+          )}
           <Toast message={toast} />
           <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
             <div style={{color:"var(--text-muted)",fontSize:"12px",marginBottom:"8px"}}>a website by Axel Hufford</div>
