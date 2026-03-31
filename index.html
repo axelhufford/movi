@@ -1839,11 +1839,10 @@
       }
 
       function handleImport(mode) {
-        const cleanMovies = matched.map(m => {
-          const { _lbRating, ...movie } = m;
-          return movie;
-        });
-        onImport(cleanMovies, mode, matched.map(m => ({ ...m })));
+        const cleanMovies = matched.map(m => ({
+          id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster, rating: m.rating
+        }));
+        onImport(cleanMovies, mode, matched.map(m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster, rating: m.rating, _lbRating: m._lbRating })));
       }
 
       if (step === "upload") {
@@ -2668,7 +2667,7 @@
               const posScore = getScore(i, merged.length + 1);
               if (targetScore >= posScore) { insertIdx = i; break; }
             }
-            const { _lbRating, ...cleanMovie } = m;
+            const cleanMovie = { id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster, rating: m.rating };
             merged.splice(insertIdx, 0, cleanMovie);
           }
           setRankedList(merged);
