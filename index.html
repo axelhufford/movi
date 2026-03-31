@@ -405,6 +405,57 @@
     .comparison-cancel:hover { border-color: var(--accent); color: var(--text); }
 
     /* Movie Detail Modal */
+    /* Import Modal */
+    .import-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85); z-index: 300;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; cursor: pointer;
+    }
+    .import-modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      max-width: 420px; width: 100%; padding: 28px; cursor: default;
+      max-height: 80vh; overflow-y: auto;
+    }
+    .import-modal h3 { font-family: 'Outfit', sans-serif; margin: 0 0 6px; font-size: 1.1rem; }
+    .import-modal p { color: var(--text-muted); font-size: 0.8rem; margin: 0 0 16px; line-height: 1.5; }
+    .import-file-input {
+      width: 100%; padding: 14px; border: 2px dashed var(--border); border-radius: 10px;
+      text-align: center; cursor: pointer; color: var(--text-muted); font-size: 0.85rem;
+      background: var(--bg); transition: border-color 0.2s; margin-bottom: 16px;
+    }
+    .import-file-input:hover { border-color: var(--accent); }
+    .import-progress-bar {
+      width: 100%; height: 6px; background: var(--surface2); border-radius: 3px;
+      overflow: hidden; margin: 12px 0;
+    }
+    .import-progress-fill {
+      height: 100%; background: var(--accent); border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .import-status { font-size: 0.8rem; color: var(--text-muted); margin: 8px 0; }
+    .import-results { margin: 12px 0; }
+    .import-success { color: #4caf50; font-weight: 600; font-size: 0.9rem; margin-bottom: 8px; }
+    .import-failed-toggle {
+      background: none; border: none; color: var(--text-muted); cursor: pointer;
+      font-size: 0.75rem; padding: 4px 0; text-decoration: underline;
+    }
+    .import-failed-list {
+      font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;
+      max-height: 120px; overflow-y: auto; line-height: 1.6;
+    }
+    .import-btns { display: flex; gap: 8px; margin-top: 16px; }
+    .import-btn {
+      flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer;
+      font-weight: 600; font-size: 0.85rem; transition: all 0.2s;
+    }
+    .import-btn-primary { background: var(--accent); color: #fff; }
+    .import-btn-primary:hover { background: var(--accent-hover); }
+    .import-btn-secondary { background: var(--surface2); color: var(--text); }
+    .import-btn-secondary:hover { opacity: 0.8; }
+    .import-btn-cancel { background: none; color: var(--text-muted); border: 1px solid var(--border); }
+    .import-warning { font-size: 0.75rem; color: var(--gold); margin-top: 10px; }
+
     .movie-detail-overlay {
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0,0,0,0.85); z-index: 250;
@@ -847,6 +898,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -951,6 +1003,61 @@
       if (score >= 7) return "score-high";
       if (score >= 4) return "score-mid";
       return "score-low";
+    }
+
+    // ─── Letterboxd Import ──────────────────────────────────────
+    async function extractLetterboxdRatings(file) {
+      let csvText;
+      if (file.name.endsWith(".zip")) {
+        const zip = await JSZip.loadAsync(file);
+        const csvFile = Object.keys(zip.files).find(f => f.toLowerCase().endsWith("ratings.csv"));
+        if (!csvFile) throw new Error("No ratings.csv found in ZIP");
+        csvText = await zip.files[csvFile].async("string");
+      } else {
+        csvText = await file.text();
+      }
+      const lines = csvText.split("\n").map(l => l.trim()).filter(l => l);
+      if (lines.length < 2) throw new Error("CSV file is empty");
+      // Parse header to find column indices
+      const header = lines[0].split(",").map(h => h.trim().toLowerCase());
+      const nameIdx = header.indexOf("name");
+      const yearIdx = header.indexOf("year");
+      const ratingIdx = header.indexOf("rating");
+      if (nameIdx === -1 || ratingIdx === -1) throw new Error("CSV missing Name or Rating columns");
+      const entries = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].match(/(".*?"|[^,]+)/g);
+        if (!cols) continue;
+        const name = (cols[nameIdx] || "").replace(/^"|"$/g, "").trim();
+        const year = yearIdx !== -1 ? (cols[yearIdx] || "").replace(/^"|"$/g, "").trim() : "";
+        const rating = parseFloat((cols[ratingIdx] || "0").replace(/^"|"$/g, ""));
+        if (name && !isNaN(rating) && rating > 0) {
+          entries.push({ title: name, year, lbRating: rating });
+        }
+      }
+      // Sort by rating desc (ties resolved later by TMDB vote average)
+      entries.sort((a, b) => b.lbRating - a.lbRating);
+      return entries;
+    }
+
+    async function lookupTMDB(title, year) {
+      try {
+        let url = `${TMDB_SEARCH_URL}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}&include_adult=false&language=en-US&page=1`;
+        if (year) url += `&year=${year}`;
+        const resp = await fetch(url);
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        if (!data.results || data.results.length === 0) {
+          // Fallback: try without year
+          if (year) return lookupTMDB(title, "");
+          return null;
+        }
+        const m = data.results[0];
+        const baseGenre = m.genre_ids && m.genre_ids.length ? (GENRE_MAP[m.genre_ids[0]] || "Drama") : "Drama";
+        return { id: m.id, title: m.title, year: m.release_date ? m.release_date.slice(0, 4) : "", genre: baseGenre, poster: m.poster_path || null, rating: m.vote_average || null };
+      } catch (e) {
+        return null;
+      }
     }
 
     // ─── Binary Insertion ───────────────────────────────────────
@@ -1440,7 +1547,7 @@
     }
 
     // ─── Ranked List (with optional read-only mode) ─────────────
-    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate }) {
+    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate, onImport }) {
       const [confirmClear, setConfirmClear] = useState(false);
       const [dragIndex, setDragIndex] = useState(null);
       const [overIndex, setOverIndex] = useState(null);
@@ -1612,6 +1719,11 @@
                     {isPrivate ? "\uD83D\uDD12" : "\uD83D\uDD13"}
                   </button>
                 )}
+                {user && onImport && (
+                  <button className="share-btn" onClick={onImport}>
+                    <span>&#x1F4E5;</span> Import
+                  </button>
+                )}
                 {user && onShare && (
                   <button className="share-btn" onClick={onShare}>
                     <span>&#x1F517;</span> Share
@@ -1677,6 +1789,136 @@
               </div>
             </div>
           )}
+        </div>
+      );
+    }
+
+    // ─── Letterboxd Import Modal ─────────────────────────────────
+    function LetterboxdImport({ onImport, onClose, existingCount }) {
+      const [step, setStep] = useState("upload"); // upload | matching | results
+      const [progress, setProgress] = useState({ current: 0, total: 0 });
+      const [matched, setMatched] = useState([]);
+      const [failed, setFailed] = useState([]);
+      const [showFailed, setShowFailed] = useState(false);
+      const fileRef = useRef(null);
+
+      async function handleFile(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          const entries = await extractLetterboxdRatings(file);
+          if (entries.length === 0) { alert("No rated movies found in file."); return; }
+          setStep("matching");
+          setProgress({ current: 0, total: entries.length });
+          const matchedMovies = [];
+          const failedMovies = [];
+          for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
+            const movie = await lookupTMDB(entry.title, entry.year);
+            if (movie) {
+              movie._lbRating = entry.lbRating;
+              matchedMovies.push(movie);
+            } else {
+              failedMovies.push(entry.title + (entry.year ? " (" + entry.year + ")" : ""));
+            }
+            setProgress({ current: i + 1, total: entries.length });
+            setMatched([...matchedMovies]);
+            setFailed([...failedMovies]);
+            if (i < entries.length - 1) await new Promise(r => setTimeout(r, 100));
+          }
+          // Sub-sort ties by TMDB vote average
+          matchedMovies.sort((a, b) => {
+            if (b._lbRating !== a._lbRating) return b._lbRating - a._lbRating;
+            return (b.rating || 0) - (a.rating || 0);
+          });
+          setMatched(matchedMovies);
+          setStep("results");
+        } catch (err) {
+          alert("Error reading file: " + err.message);
+        }
+      }
+
+      function handleImport(mode) {
+        const cleanMovies = matched.map(m => {
+          const { _lbRating, ...movie } = m;
+          return movie;
+        });
+        onImport(cleanMovies, mode, matched.map(m => ({ ...m })));
+      }
+
+      if (step === "upload") {
+        return (
+          <div className="import-overlay" onClick={onClose}>
+            <div className="import-modal" onClick={e => e.stopPropagation()}>
+              <h3>Import from Letterboxd</h3>
+              <p>Export your Letterboxd data at <strong>letterboxd.com/settings/data</strong>, then upload the ZIP file below.</p>
+              <label className="import-file-input">
+                {"\uD83D\uDCC1"} Choose ZIP or CSV file
+                <input type="file" accept=".zip,.csv" onChange={handleFile} ref={fileRef}
+                  style={{ display: "none" }} />
+              </label>
+              <div className="import-btns">
+                <button className="import-btn import-btn-cancel" onClick={onClose}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (step === "matching") {
+        const pct = progress.total > 0 ? (progress.current / progress.total) * 100 : 0;
+        return (
+          <div className="import-overlay">
+            <div className="import-modal" onClick={e => e.stopPropagation()}>
+              <h3>Matching movies...</h3>
+              <div className="import-progress-bar">
+                <div className="import-progress-fill" style={{ width: pct + "%" }}></div>
+              </div>
+              <div className="import-status">{progress.current} / {progress.total} movies processed</div>
+              {failed.length > 0 && (
+                <div className="import-status">{matched.length} matched, {failed.length} not found</div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // step === "results"
+      return (
+        <div className="import-overlay" onClick={onClose}>
+          <div className="import-modal" onClick={e => e.stopPropagation()}>
+            <h3>Import Complete</h3>
+            <div className="import-results">
+              <div className="import-success">Matched {matched.length} of {matched.length + failed.length} movies</div>
+              {failed.length > 0 && (
+                <div>
+                  <button className="import-failed-toggle" onClick={() => setShowFailed(!showFailed)}>
+                    {showFailed ? "Hide" : "Show"} {failed.length} unmatched {failed.length === 1 ? "movie" : "movies"}
+                  </button>
+                  {showFailed && (
+                    <div className="import-failed-list">
+                      {failed.map((f, i) => <div key={i}>{f}</div>)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {existingCount > 0 ? (
+              <div>
+                <div className="import-warning">You have {existingCount} existing rankings.</div>
+                <div className="import-btns">
+                  <button className="import-btn import-btn-primary" onClick={() => handleImport("replace")}>Replace All</button>
+                  <button className="import-btn import-btn-secondary" onClick={() => handleImport("merge")}>Merge</button>
+                  <button className="import-btn import-btn-cancel" onClick={onClose}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div className="import-btns">
+                <button className="import-btn import-btn-primary" onClick={() => handleImport("replace")}>Import {matched.length} Movies</button>
+                <button className="import-btn import-btn-cancel" onClick={onClose}>Cancel</button>
+              </div>
+            )}
+          </div>
         </div>
       );
     }
@@ -2223,6 +2465,7 @@
       const [tvSession, setTvSession] = useState(null);
       const [toast, setToast] = useState("");
       const [detailMovie, setDetailMovie] = useState(null);
+      const [showImport, setShowImport] = useState(false);
       const [user, setUser] = useState(null);
       const [authLoading, setAuthLoading] = useState(FIREBASE_READY);
       const [authMode, setAuthMode] = useState(null); // null, "signin", "signup"
@@ -2401,6 +2644,38 @@
         }, 1500);
         return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
       }, [rankedList, tvRankedList, watchlist, tvWatchlist, user, isPrivate]);
+
+      function handleLetterboxdImport(movies, mode, moviesWithRatings) {
+        if (mode === "replace") {
+          setRankedList(movies);
+          showToast(`Imported ${movies.length} movies from Letterboxd!`);
+        } else {
+          // Merge: keep existing, interleave new movies by Letterboxd rating
+          const existingIds = new Set(rankedList.map(m => m.id));
+          const newMovies = moviesWithRatings.filter(m => !existingIds.has(m.id));
+          if (newMovies.length === 0) {
+            showToast("All movies already in your rankings!");
+            setShowImport(false);
+            return;
+          }
+          let merged = [...rankedList];
+          for (const m of newMovies) {
+            // Map Letterboxd rating (0.5-5.0) to MOVI score (1.0-10.0)
+            const targetScore = m._lbRating * 2;
+            // Find insertion index where this score fits
+            let insertIdx = merged.length; // default: end
+            for (let i = 0; i < merged.length; i++) {
+              const posScore = getScore(i, merged.length + 1);
+              if (targetScore >= posScore) { insertIdx = i; break; }
+            }
+            const { _lbRating, ...cleanMovie } = m;
+            merged.splice(insertIdx, 0, cleanMovie);
+          }
+          setRankedList(merged);
+          showToast(`Merged ${newMovies.length} new movies from Letterboxd!`);
+        }
+        setShowImport(false);
+      }
 
       function handleTogglePrivate() {
         const next = !isPrivate;
@@ -2700,6 +2975,12 @@
                 onWatchlist={handleAddToWatchlistFromComparison}
                 itemLabel={isTV ? "TV show" : "movie"} />
               <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)} />
+              {showImport && (
+                <LetterboxdImport
+                  onImport={handleLetterboxdImport}
+                  onClose={() => setShowImport(false)}
+                  existingCount={rankedList.length} />
+              )}
               <Toast message={toast} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
                 <div style={{color:"var(--text-muted)",fontSize:"12px",marginBottom:"8px"}}>a website by Axel Hufford</div>
@@ -2787,6 +3068,7 @@
                 onMove={handleMove} onShare={handleShare} user={user}
                 onMovieClick={setDetailMovie}
                 isPrivate={isPrivate} onTogglePrivate={handleTogglePrivate}
+                onImport={!isTV ? () => setShowImport(true) : undefined}
                 itemLabel={isTV ? "TV show" : "movie"} />
               {activeList.length > 0 && (
                 <div className={`stats-accordion ${statsOpen ? "open" : ""}`}>
