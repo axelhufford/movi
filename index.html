@@ -3067,7 +3067,7 @@
                 onMove={handleMove} onShare={handleShare} user={user}
                 onMovieClick={setDetailMovie}
                 isPrivate={isPrivate} onTogglePrivate={handleTogglePrivate}
-                onImport={!isTV ? () => setShowImport(true) : undefined}
+                onImport={!isTV ? () => { alert("Import clicked! showImport will be set to true"); setShowImport(true); } : undefined}
                 itemLabel={isTV ? "TV show" : "movie"} />
               {activeList.length > 0 && (
                 <div className={`stats-accordion ${statsOpen ? "open" : ""}`}>
