@@ -1547,7 +1547,7 @@
     }
 
     // ─── Ranked List (with optional read-only mode) ─────────────
-    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate, onImport }) {
+    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate, onImport, onUndoImport }) {
       const [confirmClear, setConfirmClear] = useState(false);
       const [dragIndex, setDragIndex] = useState(null);
       const [overIndex, setOverIndex] = useState(null);
@@ -1722,6 +1722,11 @@
                 {user && onImport && (
                   <button className="share-btn" onClick={onImport}>
                     <span>&#x1F4E5;</span> Import
+                  </button>
+                )}
+                {user && onUndoImport && localStorage.getItem("movi-import-backup") && (
+                  <button className="share-btn" onClick={onUndoImport} style={{background: "var(--surface2)"}}>
+                    <span>&#x21A9;</span> Undo Import
                   </button>
                 )}
                 {user && onShare && (
@@ -2648,7 +2653,17 @@
         return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
       }, [rankedList, tvRankedList, watchlist, tvWatchlist, user, isPrivate]);
 
+      function undoLastImport() {
+        const backup = localStorage.getItem("movi-import-backup");
+        if (!backup) { showToast("No import to undo"); return; }
+        setRankedList(JSON.parse(backup));
+        localStorage.removeItem("movi-import-backup");
+        showToast("Rankings restored to pre-import state!");
+      }
+
       function handleLetterboxdImport(movies, mode, moviesWithRatings) {
+        // Backup current rankings before any import
+        localStorage.setItem("movi-import-backup", JSON.stringify(rankedList));
         if (mode === "replace") {
           setRankedList(movies);
           showToast(`Imported ${movies.length} movies from Letterboxd!`);
@@ -2661,19 +2676,21 @@
             setShowImport(false);
             return;
           }
-          let merged = [...rankedList];
-          for (const m of newMovies) {
-            // Map Letterboxd rating (0.5-5.0) to MOVI score (1.0-10.0)
-            const targetScore = m._lbRating * 2;
-            // Find insertion index where this score fits
-            let insertIdx = merged.length; // default: end
-            for (let i = 0; i < merged.length; i++) {
-              const posScore = getScore(i, merged.length + 1);
-              if (targetScore >= posScore) { insertIdx = i; break; }
-            }
-            const cleanMovie = { id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster, rating: m.rating };
-            merged.splice(insertIdx, 0, cleanMovie);
-          }
+          // Snapshot original scores so insertions don't shift them
+          const originalLen = rankedList.length;
+          const originalScores = rankedList.map((m, i) => ({
+            movie: m,
+            score: getScore(i, originalLen)
+          }));
+          // Map new movies to score entries too
+          const newEntries = newMovies.map(m => ({
+            movie: { id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster, rating: m.rating },
+            score: m._lbRating * 2 // Map 0.5-5.0 to 1.0-10.0
+          }));
+          // Combine and sort by score descending (higher score = higher rank)
+          const all = originalScores.concat(newEntries);
+          all.sort((a, b) => b.score - a.score);
+          let merged = all.map(e => e.movie);
           setRankedList(merged);
           showToast(`Merged ${newMovies.length} new movies from Letterboxd!`);
         }
@@ -3066,6 +3083,7 @@
                 onMovieClick={setDetailMovie}
                 isPrivate={isPrivate} onTogglePrivate={handleTogglePrivate}
                 onImport={!isTV ? () => setShowImport(true) : undefined}
+                onUndoImport={!isTV ? undoLastImport : undefined}
                 itemLabel={isTV ? "TV show" : "movie"} />
               {activeList.length > 0 && (
                 <div className={`stats-accordion ${statsOpen ? "open" : ""}`}>
