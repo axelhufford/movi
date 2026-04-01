@@ -1549,6 +1549,7 @@
     // ─── Ranked List (with optional read-only mode) ─────────────
     function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate, onImport, onUndoImport }) {
       const [confirmClear, setConfirmClear] = useState(false);
+      const [confirmUndo, setConfirmUndo] = useState(false);
       const [dragIndex, setDragIndex] = useState(null);
       const [overIndex, setOverIndex] = useState(null);
       const listRef = useRef(null);
@@ -1725,7 +1726,7 @@
                   </button>
                 )}
                 {user && onUndoImport && localStorage.getItem("movi-import-backup") && (
-                  <button className="share-btn" onClick={onUndoImport} style={{background: "var(--surface2)"}}>
+                  <button className="share-btn" onClick={() => setConfirmUndo(true)} style={{background: "var(--surface2)"}}>
                     <span>&#x21A9;</span> Undo Import
                   </button>
                 )}
@@ -1790,6 +1791,17 @@
                 <div className="confirm-btns">
                   <button className="confirm-yes" onClick={() => { onClear(); setConfirmClear(false); }}>Yes, Clear All</button>
                   <button className="confirm-no" onClick={() => setConfirmClear(false)}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {confirmUndo && (
+            <div className="confirm-overlay">
+              <div className="confirm-box">
+                <p>Restore your rankings to before the last import?</p>
+                <div className="confirm-btns">
+                  <button className="confirm-yes" onClick={() => { onUndoImport(); setConfirmUndo(false); }}>Yes, Undo Import</button>
+                  <button className="confirm-no" onClick={() => setConfirmUndo(false)}>Cancel</button>
                 </div>
               </div>
             </div>
