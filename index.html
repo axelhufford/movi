@@ -497,6 +497,11 @@
     }
     .ranked-header h2 { font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 700; }
     .ranked-header-btns { display: flex; gap: 8px; }
+    .genre-pills { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 12px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .genre-pills::-webkit-scrollbar { display: none; }
+    .genre-pill { padding: 5px 12px; border-radius: 16px; border: none; background: var(--surface2); color: var(--text-muted); font-size: 0.75rem; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .genre-pill:hover { background: #2a2a32; }
+    .genre-pill.active { background: var(--accent); color: #fff; }
     .clear-btn {
       padding: 6px 14px; background: none; border: 1px solid #444;
       color: var(--text-muted); border-radius: 8px; cursor: pointer;
@@ -1558,6 +1563,7 @@
     function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate, onImport, onUndoImport }) {
       const [confirmClear, setConfirmClear] = useState(false);
       const [confirmUndo, setConfirmUndo] = useState(false);
+      const [genreFilter, setGenreFilter] = useState(null);
       const [dragIndex, setDragIndex] = useState(null);
       const [overIndex, setOverIndex] = useState(null);
       const listRef = useRef(null);
@@ -1568,6 +1574,8 @@
       const itemRectsRef = useRef([]);
       const lastClientYRef = useRef(0);
       const total = list.length;
+      const genres = useMemo(() => [...new Set(list.map(m => m.genre).filter(Boolean))].sort(), [list]);
+      const displayList = genreFilter ? list.filter(m => m.genre === genreFilter) : list;
 
       useEffect(() => {
         return () => {
@@ -1720,7 +1728,7 @@
       return (
         <div className="ranked-section">
           <div className="ranked-header">
-            <h2>{readOnly ? "Rankings" : "Your Rankings"} ({total})</h2>
+            <h2>{readOnly ? "Rankings" : "Your Rankings"} ({genreFilter ? `${displayList.length} of ${total} \u00b7 ${genreFilter}` : total})</h2>
             {!readOnly && (
               <div className="ranked-header-btns">
                 {user && onTogglePrivate && (
@@ -1747,8 +1755,17 @@
               </div>
             )}
           </div>
+          {genres.length > 1 && (
+            <div className="genre-pills">
+              <button className={"genre-pill" + (!genreFilter ? " active" : "")} onClick={() => setGenreFilter(null)}>All</button>
+              {genres.map(g => (
+                <button key={g} className={"genre-pill" + (genreFilter === g ? " active" : "")} onClick={() => setGenreFilter(genreFilter === g ? null : g)}>{g}</button>
+              ))}
+            </div>
+          )}
           <div className={"ranked-list" + (dragIndex !== null ? " is-dragging" : "")} ref={listRef}>
-            {list.map((movie, i) => {
+            {displayList.map((movie) => {
+              const i = list.indexOf(movie);
               const score = getScore(i, total);
               var itemClass = "ranked-item";
               if (dragIndex === i) itemClass += " dragging-source";
