@@ -497,6 +497,17 @@
     }
     .ranked-header h2 { font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 700; }
     .ranked-header-btns { display: flex; gap: 8px; }
+    .activity-feed { margin-bottom: 20px; border-bottom: 1px solid var(--surface2); padding-bottom: 16px; }
+    .activity-feed-title { font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; color: var(--text); }
+    .activity-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+    .activity-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .activity-avatar-ph { width: 28px; height: 28px; border-radius: 50%; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: var(--text-muted); flex-shrink: 0; }
+    .activity-text { flex: 1; font-size: 0.78rem; color: var(--text-muted); line-height: 1.4; }
+    .activity-text strong { color: var(--text); font-weight: 600; }
+    .activity-poster { width: 24px; height: 36px; border-radius: 3px; object-fit: cover; flex-shrink: 0; }
+    .activity-time { font-size: 0.65rem; color: var(--text-muted); opacity: 0.7; flex-shrink: 0; white-space: nowrap; }
+    .activity-more { background: none; border: none; color: var(--accent); font-size: 0.78rem; cursor: pointer; padding: 8px 0 0; font-weight: 500; }
+    .activity-more:hover { text-decoration: underline; }
     .genre-pills { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 12px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
     .genre-pills::-webkit-scrollbar { display: none; }
     .genre-pill { padding: 5px 12px; border-radius: 16px; border: none; background: var(--surface2); color: var(--text-muted); font-size: 0.75rem; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
@@ -1090,9 +1101,26 @@
     }
 
     // ─── Firestore Helpers ──────────────────────────────────────
+    const MILESTONES = [10, 25, 50, 100, 200, 500];
+
+    async function writeActivityEvent(event) {
+      if (!db) return;
+      try {
+        await db.collection("activity").add(event);
+      } catch (e) {
+        console.error("Failed to write activity:", e);
+      }
+    }
+
     async function saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist, isPrivate) {
       if (!db || !user) return;
       try {
+        // Load existing profile to detect changes for activity feed
+        var oldDoc = await db.collection("profiles").doc(user.uid).get();
+        var oldData = oldDoc.exists ? oldDoc.data() : null;
+        var oldMovieCount = oldData ? (oldData.movieCount || 0) : 0;
+        var oldTop10Ids = oldData && oldData.movies ? oldData.movies.slice(0, 10).map(function(m) { return m.id; }).join(",") : "";
+
         const toSave = m => ({ id: m.id, title: m.title, year: m.year, genre: m.genre, poster: m.poster, rating: m.rating || null });
         await db.collection("profiles").doc(user.uid).set({
           displayName: user.displayName || "Anonymous",
@@ -1108,8 +1136,82 @@
           isPrivate: !!isPrivate,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
+
+        // Throttle: skip activity if last update was < 30s ago
+        var lastUpdate = oldData && oldData.updatedAt ? oldData.updatedAt.toDate() : null;
+        var tooSoon = lastUpdate && (Date.now() - lastUpdate.getTime()) < 30000;
+        if (tooSoon) return;
+
+        var baseEvent = {
+          uid: user.uid,
+          displayName: user.displayName || "Anonymous",
+          photoURL: user.photoURL || null,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        // Priority: joined > milestone > top10 > ranked
+        if (!oldData) {
+          // New user
+          writeActivityEvent(Object.assign({}, baseEvent, { type: "joined", movie: null, rank: null, count: null }));
+        } else {
+          var newCount = rankedList.length;
+          // Check milestone
+          var hitMilestone = null;
+          for (var mi = 0; mi < MILESTONES.length; mi++) {
+            if (oldMovieCount < MILESTONES[mi] && newCount >= MILESTONES[mi]) {
+              hitMilestone = MILESTONES[mi];
+            }
+          }
+          if (hitMilestone) {
+            writeActivityEvent(Object.assign({}, baseEvent, { type: "milestone", movie: null, rank: null, count: hitMilestone }));
+          } else {
+            // Check top 10 change
+            var newTop10Ids = rankedList.slice(0, 10).map(function(m) { return m.id; }).join(",");
+            if (oldTop10Ids && newTop10Ids !== oldTop10Ids && oldMovieCount >= 10) {
+              writeActivityEvent(Object.assign({}, baseEvent, { type: "top10", movie: null, rank: null, count: null }));
+            } else if (newCount > oldMovieCount) {
+              // New movie ranked — find the newest addition
+              var oldIds = new Set((oldData.movies || []).map(function(m) { return m.id; }));
+              var newest = null;
+              var newestRank = null;
+              for (var ri = 0; ri < rankedList.length; ri++) {
+                if (!oldIds.has(rankedList[ri].id)) {
+                  newest = rankedList[ri];
+                  newestRank = ri + 1;
+                  break;
+                }
+              }
+              if (newest) {
+                writeActivityEvent(Object.assign({}, baseEvent, {
+                  type: "ranked",
+                  movie: { id: newest.id, title: newest.title, poster: newest.poster || null },
+                  rank: newestRank,
+                  count: null
+                }));
+              }
+            }
+          }
+        }
       } catch (e) {
         console.error("Failed to save profile:", e);
+      }
+    }
+
+    async function loadActivityFeed(limit) {
+      if (!db) return [];
+      try {
+        var snap = await db.collection("activity")
+          .orderBy("timestamp", "desc")
+          .limit(limit || 20)
+          .get();
+        return snap.docs.map(function(d) {
+          var data = d.data();
+          data._id = d.id;
+          return data;
+        });
+      } catch (e) {
+        console.error("Failed to load activity feed:", e);
+        return [];
       }
     }
 
@@ -1969,6 +2071,88 @@
     }
 
     // ─── Community View ─────────────────────────────────────────
+    function timeAgo(timestamp) {
+      if (!timestamp) return "";
+      var date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      var seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+      if (seconds < 60) return "just now";
+      var minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return minutes + "m ago";
+      var hours = Math.floor(minutes / 60);
+      if (hours < 24) return hours + "h ago";
+      var days = Math.floor(hours / 24);
+      if (days < 30) return days + "d ago";
+      var months = Math.floor(days / 30);
+      return months + "mo ago";
+    }
+
+    function ActivityFeed() {
+      const [events, setEvents] = useState([]);
+      const [expanded, setExpanded] = useState(false);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(function() {
+        loadActivityFeed(20).then(function(feed) {
+          setEvents(feed);
+          setLoading(false);
+        });
+      }, []);
+
+      if (loading || events.length === 0) return null;
+
+      var visible = expanded ? events : events.slice(0, 5);
+
+      function renderEvent(ev) {
+        var text = "";
+        if (ev.type === "ranked" && ev.movie) {
+          text = React.createElement("span", null,
+            React.createElement("strong", null, ev.displayName),
+            " ranked ",
+            React.createElement("strong", null, ev.movie.title),
+            " at #" + ev.rank
+          );
+        } else if (ev.type === "top10") {
+          text = React.createElement("span", null,
+            React.createElement("strong", null, ev.displayName),
+            "\u2019s top 10 changed"
+          );
+        } else if (ev.type === "milestone") {
+          text = React.createElement("span", null,
+            "\uD83C\uDF89 ",
+            React.createElement("strong", null, ev.displayName),
+            " ranked their " + ev.count + (ev.count === 1 ? "st" : ev.count === 2 ? "nd" : ev.count === 3 ? "rd" : "th") + " movie!"
+          );
+        } else if (ev.type === "joined") {
+          text = React.createElement("span", null,
+            React.createElement("strong", null, ev.displayName),
+            " joined MOVI!"
+          );
+        }
+
+        return React.createElement("div", { key: ev._id, className: "activity-item" },
+          ev.photoURL
+            ? React.createElement("img", { src: ev.photoURL, className: "activity-avatar", referrerPolicy: "no-referrer" })
+            : React.createElement("div", { className: "activity-avatar-ph" }, (ev.displayName || "?")[0]),
+          React.createElement("div", { className: "activity-text" }, text),
+          ev.type === "ranked" && ev.movie && ev.movie.poster
+            ? React.createElement("img", { src: "https://image.tmdb.org/t/p/w92" + ev.movie.poster, className: "activity-poster" })
+            : null,
+          React.createElement("div", { className: "activity-time" }, timeAgo(ev.timestamp))
+        );
+      }
+
+      return React.createElement("div", { className: "activity-feed" },
+        React.createElement("div", { className: "activity-feed-title" }, "Recent Activity"),
+        visible.map(renderEvent),
+        !expanded && events.length > 5
+          ? React.createElement("button", { className: "activity-more", onClick: function() { setExpanded(true); } }, "Show more")
+          : null,
+        expanded && events.length > 5
+          ? React.createElement("button", { className: "activity-more", onClick: function() { setExpanded(false); } }, "Show less")
+          : null
+      );
+    }
+
     function CommunityView({ onViewProfile, currentUid, isAdmin, myMovies, myTv }) {
       const [profiles, setProfiles] = useState([]);
       const [loading, setLoading] = useState(true);
@@ -2036,6 +2220,7 @@
               Compatibility % is based on how many movies you have in common and how similarly you ranked them. Higher % = more similar taste!
             </div>
           )}
+          <ActivityFeed />
           <div className="community-list">
             {profiles.map(p => (
               <div key={p.uid} className="community-card" onClick={() => onViewProfile(p.uid)}>
