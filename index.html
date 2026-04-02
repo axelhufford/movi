@@ -1268,7 +1268,10 @@
           genre2: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=${gIds[genre2] || 16}`,
           genre3: isTV
             ? `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=${gIds["Sci-Fi & Fantasy"] || 10765}`
-            : `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=35,10749`,
+            : `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=35`,
+          genre4: isTV
+            ? null
+            : `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=10749`,
           classics: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=vote_count.desc&${isTV ? "first_air_date.lte" : "primary_release_date.lte"}=${isTV ? "2005" : "1990"}-12-31`,
         };
 
@@ -1296,9 +1299,10 @@
           fetchTMDBCategory(endpoints.genre1, rankedIds, gMap, isTV, 15),
           fetchTMDBCategory(endpoints.genre2, rankedIds, gMap, isTV, 15),
           fetchTMDBCategory(endpoints.genre3, rankedIds, gMap, isTV, 15),
+          endpoints.genre4 ? fetchTMDBCategory(endpoints.genre4, rankedIds, gMap, isTV, 15) : Promise.resolve([]),
           fetchTMDBCategory(endpoints.classics, rankedIds, gMap, isTV, 15),
-        ]).then(([forYou, popular, acclaimed, newReleases, g1, g2, g3, classics]) => {
-          setTmdbCats({ forYou, popular, acclaimed, newReleases, g1, g2, g3, classics });
+        ]).then(([forYou, popular, acclaimed, newReleases, g1, g2, g3, g4, classics]) => {
+          setTmdbCats({ forYou, popular, acclaimed, newReleases, g1, g2, g3, g4, classics });
         });
 
         rankedCountRef.current = rankedIds.size;
@@ -1308,7 +1312,8 @@
         const db = localDb;
         const genre1 = isTV ? "Drama" : "Horror";
         const genre2 = isTV ? "Comedy" : "Animation";
-        const genre3Label = isTV ? "Sci-Fi & Fantasy" : "Comedies & Romance";
+        const genre3Label = isTV ? "Sci-Fi & Fantasy" : "Comedy";
+        const genre4Label = isTV ? null : "Romance";
         const forYouTitle = isTV ? "Shows You May Like" : "Movies You May Like";
 
         // Helper: merge local DB results with TMDB results, preferring unranked
@@ -1361,9 +1366,12 @@
         cats.push({ title: genre1, movies: mergeResults(db.filter(m => m.genre === genre1), tmdbCats.g1, 15) });
         cats.push({ title: genre2, movies: mergeResults(db.filter(m => m.genre === genre2), tmdbCats.g2, 15) });
         cats.push({ title: genre3Label, movies: mergeResults(
-          isTV ? db.filter(m => m.genre === "Sci-Fi & Fantasy") : db.filter(m => m.genre === "Comedy" || m.genre === "Romance"),
+          isTV ? db.filter(m => m.genre === "Sci-Fi & Fantasy") : db.filter(m => m.genre === "Comedy"),
           tmdbCats.g3, 15
         ) });
+        if (genre4Label) {
+          cats.push({ title: genre4Label, movies: mergeResults(db.filter(m => m.genre === "Romance"), tmdbCats.g4, 15) });
+        }
 
         // Classics
         const classicYear = isTV ? 2005 : 1990;
@@ -1725,7 +1733,7 @@
                     <span>&#x1F4E5;</span> Import
                   </button>
                 )}
-                {user && onUndoImport && localStorage.getItem("movi-import-backup") && (
+                {user && onUndoImport && localStorage.getItem("movi-import-backup") && (Date.now() - parseInt(localStorage.getItem("movi-import-backup-time") || "0")) < 86400000 && (
                   <button className="share-btn" onClick={() => setConfirmUndo(true)} style={{background: "var(--surface2)"}}>
                     <span>&#x21A9;</span> Undo Import
                   </button>
@@ -2670,12 +2678,14 @@
         if (!backup) { showToast("No import to undo"); return; }
         setRankedList(JSON.parse(backup));
         localStorage.removeItem("movi-import-backup");
+        localStorage.removeItem("movi-import-backup-time");
         showToast("Rankings restored to pre-import state!");
       }
 
       function handleLetterboxdImport(movies, mode, moviesWithRatings) {
         // Backup current rankings before any import
         localStorage.setItem("movi-import-backup", JSON.stringify(rankedList));
+        localStorage.setItem("movi-import-backup-time", Date.now().toString());
         if (mode === "replace") {
           setRankedList(movies);
           showToast(`Imported ${movies.length} movies from Letterboxd!`);
