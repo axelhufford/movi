@@ -497,6 +497,18 @@
     }
     .ranked-header h2 { font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 700; }
     .ranked-header-btns { display: flex; gap: 8px; }
+    .trophy-section-title { font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 700; margin-bottom: 12px; color: var(--text); }
+    .trophy-shelf { display: flex; gap: 10px; overflow-x: auto; padding: 0 0 16px; margin-bottom: 20px; -webkit-overflow-scrolling: touch; scrollbar-width: none; border-bottom: 1px solid var(--surface2); }
+    .trophy-shelf::-webkit-scrollbar { display: none; }
+    .trophy-card { flex-shrink: 0; width: 130px; background: var(--surface); border: 1px solid var(--surface2); border-radius: 12px; padding: 12px 10px; text-align: center; cursor: pointer; transition: border-color 0.15s, transform 0.15s; }
+    .trophy-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .trophy-emoji { font-size: 1.6rem; margin-bottom: 4px; }
+    .trophy-name { font-size: 0.68rem; font-weight: 700; color: var(--text); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .trophy-winner-row { display: flex; align-items: center; justify-content: center; gap: 5px; margin-bottom: 4px; }
+    .trophy-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
+    .trophy-avatar-ph { width: 20px; height: 20px; border-radius: 50%; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 0.55rem; color: var(--text-muted); }
+    .trophy-winner-name { font-size: 0.7rem; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
+    .trophy-detail { font-size: 0.6rem; color: var(--text-muted); }
     .activity-feed { margin-bottom: 20px; border-bottom: 1px solid var(--surface2); padding-bottom: 16px; }
     .activity-feed-title { font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; color: var(--text); }
     .activity-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
@@ -2153,13 +2165,253 @@
       );
     }
 
+    function computeTrophies(allProfiles) {
+      if (!allProfiles || allProfiles.length < 2) return [];
+      var trophies = [];
+
+      // Helper: find profile with max value for a stat
+      function maxBy(fn, minThreshold) {
+        var best = null; var bestVal = -Infinity;
+        allProfiles.forEach(function(p) {
+          var val = fn(p);
+          if (val > bestVal && (!minThreshold || val >= minThreshold)) { best = p; bestVal = val; }
+        });
+        return best ? { winner: best, val: bestVal } : null;
+      }
+
+      function minBy(fn, minMovies) {
+        var best = null; var bestVal = Infinity;
+        allProfiles.forEach(function(p) {
+          if (minMovies && (p.movies || []).length < minMovies) return;
+          var val = fn(p);
+          if (val !== null && val < bestVal) { best = p; bestVal = val; }
+        });
+        return best ? { winner: best, val: bestVal } : null;
+      }
+
+      function countGenre(p, genre) { return (p.movies || []).filter(function(m) { return m.genre === genre; }).length; }
+      function countEra(p, minY, maxY) { return (p.movies || []).filter(function(m) { var y = parseInt(m.year); return y >= minY && y <= maxY; }).length; }
+
+      // Volume
+      var r = maxBy(function(p) { return p.movieCount || 0; }, 1);
+      if (r) trophies.push({ emoji: "\uD83C\uDFAC", name: "Film Buff", winner: r.winner, detail: r.val + " movies" });
+
+      r = maxBy(function(p) { return p.tvShowCount || 0; }, 1);
+      if (r) trophies.push({ emoji: "\uD83D\uDCFA", name: "Binge King", winner: r.winner, detail: r.val + " shows" });
+
+      r = maxBy(function(p) { return (p.movieCount || 0) + (p.tvShowCount || 0); }, 1);
+      if (r) trophies.push({ emoji: "\uD83D\uDCDA", name: "Completionist", winner: r.winner, detail: r.val + " total" });
+
+      // Genre
+      var genres = [
+        { genre: "Horror", emoji: "\uD83D\uDD2A", name: "Horror Fanatic" },
+        { genre: "Comedy", emoji: "\uD83D\uDE02", name: "Comedy King" },
+        { genre: "Action", emoji: "\uD83D\uDCA5", name: "Action Hero" },
+        { genre: "Sci-Fi", emoji: "\uD83E\uDDEA", name: "Sci-Fi Nerd" },
+        { genre: "Romance", emoji: "\uD83D\uDC94", name: "Hopeless Romantic" },
+        { genre: "Drama", emoji: "\uD83C\uDFAD", name: "Drama Lover" }
+      ];
+      genres.forEach(function(g) {
+        r = maxBy(function(p) { return countGenre(p, g.genre); }, 5);
+        if (r) trophies.push({ emoji: g.emoji, name: g.name, winner: r.winner, detail: r.val + " " + g.genre.toLowerCase() });
+      });
+
+      // Era
+      r = maxBy(function(p) { return countEra(p, 0, 1979); }, 5);
+      if (r) trophies.push({ emoji: "\uD83D\uDCFC", name: "Old Soul", winner: r.winner, detail: r.val + " pre-1980" });
+
+      r = maxBy(function(p) { return countEra(p, 1980, 1999); }, 5);
+      if (r) trophies.push({ emoji: "\uD83D\uDD79\uFE0F", name: "80s/90s Kid", winner: r.winner, detail: r.val + " movies" });
+
+      r = maxBy(function(p) { return countEra(p, 2020, 2099); }, 5);
+      if (r) trophies.push({ emoji: "\u2728", name: "Modern Critic", winner: r.winner, detail: r.val + " movies" });
+
+      // Taste: Mainstream Maven (highest avg TMDB rating in top 10)
+      r = maxBy(function(p) {
+        var movies = (p.movies || []).slice(0, 10).filter(function(m) { return m.rating; });
+        if (movies.length < 5) return -Infinity;
+        return movies.reduce(function(sum, m) { return sum + m.rating; }, 0) / movies.length;
+      }, 0);
+      if (r && r.val > -Infinity) trophies.push({ emoji: "\uD83C\uDFAF", name: "Mainstream Maven", winner: r.winner, detail: "avg " + r.val.toFixed(1) + " TMDB" });
+
+      // Hidden Gem Hunter (lowest avg TMDB rating in top 10)
+      r = minBy(function(p) {
+        var movies = (p.movies || []).slice(0, 10).filter(function(m) { return m.rating; });
+        if (movies.length < 5) return null;
+        return movies.reduce(function(sum, m) { return sum + m.rating; }, 0) / movies.length;
+      }, 10);
+      if (r) trophies.push({ emoji: "\uD83D\uDD0D", name: "Hidden Gem Hunter", winner: r.winner, detail: "avg " + r.val.toFixed(1) + " TMDB" });
+
+      // Globe Trotter (most unique genres)
+      r = maxBy(function(p) {
+        var g = {};
+        (p.movies || []).forEach(function(m) { if (m.genre) g[m.genre] = true; });
+        return Object.keys(g).length;
+      }, 3);
+      if (r) trophies.push({ emoji: "\uD83C\uDF0D", name: "Globe Trotter", winner: r.winner, detail: r.val + " genres" });
+
+      // Time Traveler (widest year range)
+      r = maxBy(function(p) {
+        var years = (p.movies || []).map(function(m) { return parseInt(m.year); }).filter(function(y) { return y > 1900; });
+        if (years.length < 5) return 0;
+        return Math.max.apply(null, years) - Math.min.apply(null, years);
+      }, 10);
+      if (r) trophies.push({ emoji: "\uD83D\uDCC5", name: "Time Traveler", winner: r.winner, detail: r.val + " year span" });
+
+      // Social trophies — compute pairwise compatibility
+      // Build compatibility matrix
+      var compatScores = {};
+      var bestPairScore = -1;
+      var bestPair = null;
+      allProfiles.forEach(function(a) {
+        compatScores[a.uid] = { total: 0, count: 0 };
+      });
+      for (var i = 0; i < allProfiles.length; i++) {
+        for (var j = i + 1; j < allProfiles.length; j++) {
+          var a = allProfiles[i]; var b = allProfiles[j];
+          var score = computeCompatibility(a.movies || [], a.tvShows || [], b.movies || [], b.tvShows || []);
+          if (score !== null) {
+            compatScores[a.uid].total += score; compatScores[a.uid].count++;
+            compatScores[b.uid].total += score; compatScores[b.uid].count++;
+            if (score > bestPairScore) { bestPairScore = score; bestPair = [a, b]; }
+          }
+        }
+      }
+
+      // Hottest Take — #1 movie ranked lowest by others
+      var hottestProfile = null; var hottestAvgRank = -1;
+      allProfiles.forEach(function(p) {
+        if (!p.movies || p.movies.length < 5) return;
+        var top1Id = p.movies[0].id;
+        var ranks = [];
+        allProfiles.forEach(function(other) {
+          if (other.uid === p.uid || !other.movies) return;
+          var idx = -1;
+          for (var k = 0; k < other.movies.length; k++) {
+            if (other.movies[k].id === top1Id) { idx = k; break; }
+          }
+          if (idx >= 0 && other.movies.length > 1) {
+            ranks.push(idx / (other.movies.length - 1)); // normalized 0-1, higher = lower ranked
+          }
+        });
+        if (ranks.length >= 1) {
+          var avg = ranks.reduce(function(s, v) { return s + v; }, 0) / ranks.length;
+          if (avg > hottestAvgRank) { hottestAvgRank = avg; hottestProfile = p; }
+        }
+      });
+      if (hottestProfile) {
+        trophies.push({ emoji: "\uD83C\uDF36\uFE0F", name: "Hottest Take", winner: hottestProfile, detail: "#1: " + hottestProfile.movies[0].title });
+      }
+
+      // Crowd Pleaser (highest avg compat)
+      var crowdBest = null; var crowdBestAvg = -1;
+      allProfiles.forEach(function(p) {
+        var cs = compatScores[p.uid];
+        if (cs && cs.count >= 1) {
+          var avg = cs.total / cs.count;
+          if (avg > crowdBestAvg) { crowdBestAvg = avg; crowdBest = p; }
+        }
+      });
+      if (crowdBest) trophies.push({ emoji: "\uD83D\uDC11", name: "Crowd Pleaser", winner: crowdBest, detail: Math.round(crowdBestAvg) + "% avg" });
+
+      // Lone Wolf (lowest avg compat)
+      var loneBest = null; var loneBestAvg = Infinity;
+      allProfiles.forEach(function(p) {
+        var cs = compatScores[p.uid];
+        if (cs && cs.count >= 1) {
+          var avg = cs.total / cs.count;
+          if (avg < loneBestAvg) { loneBestAvg = avg; loneBest = p; }
+        }
+      });
+      if (loneBest) trophies.push({ emoji: "\uD83D\uDC3A", name: "Lone Wolf", winner: loneBest, detail: Math.round(loneBestAvg) + "% avg" });
+
+      // The Contrarian — biggest single-movie ranking gap vs community average
+      var contrarianBest = null; var contrarianGap = -1; var contrarianMovie = null;
+      allProfiles.forEach(function(p) {
+        if (!p.movies || p.movies.length < 10) return;
+        p.movies.forEach(function(m, myIdx) {
+          var myNorm = myIdx / (p.movies.length - 1);
+          var otherNorms = [];
+          allProfiles.forEach(function(other) {
+            if (other.uid === p.uid || !other.movies || other.movies.length < 5) return;
+            for (var k = 0; k < other.movies.length; k++) {
+              if (other.movies[k].id === m.id) {
+                otherNorms.push(k / (other.movies.length - 1));
+                break;
+              }
+            }
+          });
+          if (otherNorms.length >= 1) {
+            var avgOther = otherNorms.reduce(function(s, v) { return s + v; }, 0) / otherNorms.length;
+            var gap = Math.abs(myNorm - avgOther);
+            if (gap > contrarianGap) { contrarianGap = gap; contrarianBest = p; contrarianMovie = m; }
+          }
+        });
+      });
+      if (contrarianBest && contrarianMovie) {
+        trophies.push({ emoji: "\uD83D\uDCCF", name: "The Contrarian", winner: contrarianBest, detail: contrarianMovie.title });
+      }
+
+      // Taste Twins
+      if (bestPair && bestPairScore > 0) {
+        trophies.push({
+          emoji: "\uD83D\uDC6F", name: "Taste Twins",
+          winner: bestPair[0], winner2: bestPair[1],
+          detail: bestPairScore + "% match"
+        });
+      }
+
+      return trophies;
+    }
+
+    function TrophyShelf({ trophies, onViewProfile }) {
+      if (!trophies || trophies.length === 0) return null;
+
+      function renderAvatar(p) {
+        if (!p) return null;
+        return p.photoURL
+          ? React.createElement("img", { src: p.photoURL, className: "trophy-avatar", referrerPolicy: "no-referrer" })
+          : React.createElement("div", { className: "trophy-avatar-ph" }, (p.displayName || "?")[0]);
+      }
+
+      return React.createElement("div", null,
+        React.createElement("div", { className: "trophy-section-title" }, "\uD83C\uDFC6 Community Awards"),
+        React.createElement("div", { className: "trophy-shelf" },
+          trophies.map(function(t, idx) {
+            return React.createElement("div", {
+              key: idx,
+              className: "trophy-card",
+              onClick: function() { onViewProfile(t.winner.uid); }
+            },
+              React.createElement("div", { className: "trophy-emoji" }, t.emoji),
+              React.createElement("div", { className: "trophy-name" }, t.name),
+              React.createElement("div", { className: "trophy-winner-row" },
+                renderAvatar(t.winner),
+                t.winner2 ? renderAvatar(t.winner2) : null,
+                React.createElement("div", { className: "trophy-winner-name" },
+                  t.winner2
+                    ? (t.winner.displayName || "?").split(" ")[0] + " & " + (t.winner2.displayName || "?").split(" ")[0]
+                    : t.winner.displayName || "Anonymous"
+                )
+              ),
+              React.createElement("div", { className: "trophy-detail" }, t.detail)
+            );
+          })
+        )
+      );
+    }
+
     function CommunityView({ onViewProfile, currentUid, isAdmin, myMovies, myTv }) {
       const [profiles, setProfiles] = useState([]);
+      const [trophies, setTrophies] = useState([]);
       const [loading, setLoading] = useState(true);
       const [showExplainer, setShowExplainer] = useState(false);
 
       useEffect(() => {
         loadCommunityProfiles().then(p => {
+          // Compute trophies using ALL profiles (including current user)
+          setTrophies(computeTrophies(p));
+
           let filtered = p.filter(pr => pr.uid !== currentUid);
           // Compute compatibility scores and sort
           const hasMyRankings = (myMovies && myMovies.length > 0) || (myTv && myTv.length > 0);
@@ -2220,6 +2472,7 @@
               Compatibility % is based on how many movies you have in common and how similarly you ranked them. Higher % = more similar taste!
             </div>
           )}
+          <TrophyShelf trophies={trophies} onViewProfile={onViewProfile} />
           <ActivityFeed />
           <div className="community-list">
             {profiles.map(p => (
