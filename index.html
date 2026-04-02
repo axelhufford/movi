@@ -1165,33 +1165,36 @@
           timestamp: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        // Priority: joined > milestone > top10 > ranked
+        // Priority: joined > milestone > top10 > ranked (check both movies and TV)
         if (!oldData) {
-          // New user
           writeActivityEvent(Object.assign({}, baseEvent, { type: "joined", movie: null, rank: null, count: null }));
         } else {
-          var newCount = rankedList.length;
-          // Check milestone
+          var newMovieCount = rankedList.length;
+          var newTvCount = tvRankedList.length;
+          var oldTvCount = oldData.tvShowCount || 0;
+          var oldTvTop10Ids = oldData.tvShows ? oldData.tvShows.slice(0, 10).map(function(m) { return m.id; }).join(",") : "";
+
+          // Check movie milestone
           var hitMilestone = null;
           for (var mi = 0; mi < MILESTONES.length; mi++) {
-            if (oldMovieCount < MILESTONES[mi] && newCount >= MILESTONES[mi]) {
+            if (oldMovieCount < MILESTONES[mi] && newMovieCount >= MILESTONES[mi]) {
               hitMilestone = MILESTONES[mi];
             }
           }
           if (hitMilestone) {
             writeActivityEvent(Object.assign({}, baseEvent, { type: "milestone", movie: null, rank: null, count: hitMilestone }));
           } else {
-            // Check top 10 change
+            // Check movie top 10 change
             var newTop10Ids = rankedList.slice(0, 10).map(function(m) { return m.id; }).join(",");
             if (oldTop10Ids && newTop10Ids !== oldTop10Ids && oldMovieCount >= 10) {
               writeActivityEvent(Object.assign({}, baseEvent, { type: "top10", movie: null, rank: null, count: null }));
-            } else if (newCount > oldMovieCount) {
-              // New movie ranked — find the newest addition
-              var oldIds = new Set((oldData.movies || []).map(function(m) { return m.id; }));
+            } else if (newMovieCount > oldMovieCount) {
+              // New movie ranked
+              var oldMovieIds = new Set((oldData.movies || []).map(function(m) { return m.id; }));
               var newest = null;
               var newestRank = null;
               for (var ri = 0; ri < rankedList.length; ri++) {
-                if (!oldIds.has(rankedList[ri].id)) {
+                if (!oldMovieIds.has(rankedList[ri].id)) {
                   newest = rankedList[ri];
                   newestRank = ri + 1;
                   break;
@@ -1204,6 +1207,33 @@
                   rank: newestRank,
                   count: null
                 }));
+              }
+            } else if (newTvCount > oldTvCount) {
+              // New TV show ranked
+              var oldTvIds = new Set((oldData.tvShows || []).map(function(m) { return m.id; }));
+              var newestTv = null;
+              var newestTvRank = null;
+              for (var ti = 0; ti < tvRankedList.length; ti++) {
+                if (!oldTvIds.has(tvRankedList[ti].id)) {
+                  newestTv = tvRankedList[ti];
+                  newestTvRank = ti + 1;
+                  break;
+                }
+              }
+              if (newestTv) {
+                writeActivityEvent(Object.assign({}, baseEvent, {
+                  type: "ranked",
+                  movie: { id: newestTv.id, title: newestTv.title, poster: newestTv.poster || null },
+                  rank: newestTvRank,
+                  count: null,
+                  isTV: true
+                }));
+              }
+            } else {
+              // Check TV top 10 change
+              var newTvTop10Ids = tvRankedList.slice(0, 10).map(function(m) { return m.id; }).join(",");
+              if (oldTvTop10Ids && newTvTop10Ids !== oldTvTop10Ids && oldTvCount >= 10) {
+                writeActivityEvent(Object.assign({}, baseEvent, { type: "top10", movie: null, rank: null, count: null, isTV: true }));
               }
             }
           }
@@ -2120,23 +2150,24 @@
 
       function renderEvent(ev) {
         var text = "";
+        var label = ev.isTV ? "TV show" : "movie";
         if (ev.type === "ranked" && ev.movie) {
           text = React.createElement("span", null,
             React.createElement("strong", null, ev.displayName),
             " ranked ",
             React.createElement("strong", null, ev.movie.title),
-            " at #" + ev.rank
+            " at #" + ev.rank + (ev.isTV ? " (TV)" : "")
           );
         } else if (ev.type === "top10") {
           text = React.createElement("span", null,
             React.createElement("strong", null, ev.displayName),
-            "\u2019s top 10 changed"
+            "\u2019s top 10 " + (ev.isTV ? "TV shows" : "movies") + " changed"
           );
         } else if (ev.type === "milestone") {
           text = React.createElement("span", null,
             "\uD83C\uDF89 ",
             React.createElement("strong", null, ev.displayName),
-            " ranked their " + ev.count + (ev.count === 1 ? "st" : ev.count === 2 ? "nd" : ev.count === 3 ? "rd" : "th") + " movie!"
+            " ranked their " + ev.count + (ev.count === 1 ? "st" : ev.count === 2 ? "nd" : ev.count === 3 ? "rd" : "th") + " " + label + "!"
           );
         } else if (ev.type === "joined") {
           text = React.createElement("span", null,
