@@ -509,6 +509,10 @@
     .trophy-avatar-ph { width: 20px; height: 20px; border-radius: 50%; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 0.55rem; color: var(--text-muted); }
     .trophy-winner-name { font-size: 0.7rem; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
     .trophy-detail { font-size: 0.6rem; color: var(--text-muted); }
+    .trophy-card-selected { border-color: var(--accent); }
+    .trophy-explainer { background: var(--surface2); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.8rem; color: var(--text-muted); position: relative; line-height: 1.5; }
+    .trophy-explainer strong { color: var(--text); }
+    .trophy-explainer-close { position: absolute; top: 6px; right: 10px; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
     .activity-feed { margin-bottom: 20px; border-bottom: 1px solid var(--surface2); padding-bottom: 16px; }
     .activity-feed-title { font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; color: var(--text); }
     .activity-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
@@ -2364,8 +2368,33 @@
       return trophies;
     }
 
+    var TROPHY_DESCRIPTIONS = {
+      "Film Buff": "Most movies ranked in the community",
+      "Binge King": "Most TV shows ranked in the community",
+      "Completionist": "Most total movies and TV shows ranked combined",
+      "Horror Fanatic": "Most horror movies ranked",
+      "Comedy King": "Most comedies ranked",
+      "Action Hero": "Most action movies ranked",
+      "Sci-Fi Nerd": "Most sci-fi movies ranked",
+      "Hopeless Romantic": "Most romance movies ranked",
+      "Drama Lover": "Most dramas ranked",
+      "Old Soul": "Most pre-1980 movies ranked",
+      "80s/90s Kid": "Most movies from the 1980s and 1990s ranked",
+      "Modern Critic": "Most movies from 2020 and beyond ranked",
+      "Mainstream Maven": "Highest average TMDB rating across their top 10 movies",
+      "Hidden Gem Hunter": "Lowest average TMDB rating across their top 10 \u2014 loves the underdogs",
+      "Globe Trotter": "Most diverse taste \u2014 ranks across the most different genres",
+      "Time Traveler": "Widest year range between their oldest and newest ranked movie",
+      "Hottest Take": "Their #1 movie is ranked the lowest by everyone else",
+      "Crowd Pleaser": "Highest average compatibility with all other users",
+      "Lone Wolf": "Lowest average compatibility \u2014 the most unique taste",
+      "The Contrarian": "Biggest ranking gap vs. the community average on a single movie",
+      "Taste Twins": "The two users with the highest compatibility score"
+    };
+
     function TrophyShelf({ trophies, onViewProfile }) {
       if (!trophies || trophies.length === 0) return null;
+      const [selected, setSelected] = useState(null);
 
       function renderAvatar(p) {
         if (!p) return null;
@@ -2376,12 +2405,25 @@
 
       return React.createElement("div", null,
         React.createElement("div", { className: "trophy-section-title" }, "\uD83C\uDFC6 Community Awards"),
+        selected !== null && trophies[selected] ? React.createElement("div", { className: "trophy-explainer" },
+          React.createElement("button", { className: "trophy-explainer-close", onClick: function() { setSelected(null); } }, "\u00d7"),
+          React.createElement("strong", null, trophies[selected].emoji + " " + trophies[selected].name),
+          " \u2014 ",
+          TROPHY_DESCRIPTIONS[trophies[selected].name] || ""
+        ) : null,
         React.createElement("div", { className: "trophy-shelf" },
           trophies.map(function(t, idx) {
             return React.createElement("div", {
               key: idx,
-              className: "trophy-card",
-              onClick: function() { onViewProfile(t.winner.uid); }
+              className: "trophy-card" + (selected === idx ? " trophy-card-selected" : ""),
+              onClick: function(e) {
+                e.stopPropagation();
+                if (selected === idx) {
+                  onViewProfile(t.winner.uid);
+                } else {
+                  setSelected(idx);
+                }
+              }
             },
               React.createElement("div", { className: "trophy-emoji" }, t.emoji),
               React.createElement("div", { className: "trophy-name" }, t.name),
