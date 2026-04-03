@@ -1667,7 +1667,7 @@
     }
 
     // ─── Comparison View ────────────────────────────────────────
-    function ComparisonView({ session, onChoice, onCancel, onWatchlist, itemLabel }) {
+    function ComparisonView({ session, onChoice, onCancel, onWatchlist, onSkip, itemLabel }) {
       if (!session || session.done) return null;
       const { newMovie, compareMovie, step, maxSteps } = session;
 
@@ -1698,6 +1698,12 @@
                 <button className="comparison-cancel" onClick={onWatchlist}
                   style={{borderColor:"var(--gold)",color:"var(--gold)",marginTop:0}}>
                   &#x2606; Add to Watchlist
+                </button>
+              )}
+              {onSkip && (
+                <button className="comparison-cancel" onClick={onSkip}
+                  style={{borderColor:"var(--accent)",color:"var(--accent)",marginTop:0}}>
+                  &#x1F3B2; Can't Decide
                 </button>
               )}
               <button className="comparison-cancel" onClick={onCancel} style={{marginTop:0}}>Cancel</button>
@@ -3454,6 +3460,12 @@
         }
       }
 
+      function handleCantDecide() {
+        var preferNew = Math.random() < 0.5;
+        handleChoice(preferNew);
+        showToast("Coin flip! \uD83C\uDFB2");
+      }
+
       function handleChoice(preferNew) {
         // Use the session's stored type to ensure correct list is used
         const sessionIsTV = activeSession._isTV !== undefined ? activeSession._isTV : isTV;
@@ -3545,6 +3557,7 @@
                 onMovieClick={setDetailMovie} />
               <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
                 onWatchlist={handleAddToWatchlistFromComparison}
+                onSkip={handleCantDecide}
                 itemLabel={isTV ? "TV show" : "movie"} />
               <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)} />
               <Toast message={toast} />
@@ -3698,6 +3711,7 @@
 
           <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
             onWatchlist={handleAddToWatchlistFromComparison}
+            onSkip={handleCantDecide}
             itemLabel={isTV ? "TV show" : "movie"} />
           {showImport && (
             <LetterboxdImport
