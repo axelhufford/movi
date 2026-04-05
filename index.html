@@ -1671,13 +1671,22 @@
       if (!session || session.done) return null;
       const { newMovie, compareMovie, step, maxSteps } = session;
 
-      function Card({ movie, onClick }) {
+      var compareScore = getScore(session.mid, session.list.length);
+
+      function Card({ movie, onClick, score }) {
         return (
           <div className="comparison-card" onClick={onClick}>
             <Poster poster={movie.poster} title={movie.title} size="lg" />
             <div className="comparison-card-info">
               <div className="comparison-card-title">{movie.title}</div>
-              <div className="comparison-card-year">{movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}</div>
+              <div className="comparison-card-year">
+                {movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}
+                {score !== undefined && (
+                  <span className={`score-badge ${scoreClass(score)}`} style={{marginLeft: 8, fontSize: "0.7rem", padding: "2px 6px"}}>
+                    {score.toFixed(1)}
+                  </span>
+                )}
+              </div>
               <div className="comparison-label">I prefer this</div>
             </div>
           </div>
@@ -1691,7 +1700,7 @@
             <div className="comparison-progress">Comparison {step + 1} of ~{Math.max(maxSteps, 1)}</div>
             <div className="comparison-cards">
               <Card movie={newMovie} onClick={() => onChoice(true)} />
-              <Card movie={compareMovie} onClick={() => onChoice(false)} />
+              <Card movie={compareMovie} onClick={() => onChoice(false)} score={compareScore} />
             </div>
             <div style={{display:"flex",gap:"8px",justifyContent:"center",marginTop:"16px",flexWrap:"wrap"}}>
               {onWatchlist && (
