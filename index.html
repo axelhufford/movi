@@ -1629,13 +1629,13 @@
         const forYouTitle = isTV ? "Shows You May Like" : "Movies You May Like";
 
         // Helper: merge local DB results with TMDB results, preferring unranked
-        function mergeResults(localItems, tmdbItems, limit) {
+        function mergeResults(localItems, tmdbItems) {
           const merged = new Map();
           localItems.filter(m => !rankedIds.has(m.id)).forEach(m => merged.set(m.id, m));
           (tmdbItems || []).filter(m => !rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
           localItems.filter(m => rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
           (tmdbItems || []).filter(m => rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
-          return [...merged.values()].slice(0, limit);
+          return [...merged.values()];
         }
 
         const popularIds = isTV ? POPULAR_TV_IDS : POPULAR_MOVIE_IDS;
@@ -1657,34 +1657,34 @@
           const topDecades = Object.entries(decadeCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => Number(e[0]));
           return db.filter(m => !rankedIds.has(m.id) && (topGenres.includes(m.genre) || topDecades.includes(Math.floor(parseInt(m.year) / 10) * 10)));
         })() : [];
-        const forYou = mergeResults(localForYou, getTmdbMovies("forYou"), 20);
+        const forYou = mergeResults(localForYou, getTmdbMovies("forYou"));
         if (forYou.length > 0) cats.push({ title: forYouTitle, catKey: "forYou", movies: forYou });
 
         // Popular
-        cats.push({ title: "Popular", catKey: "popular", movies: mergeResults(db.filter(m => popularIdSet.has(m.id)), getTmdbMovies("popular"), 20) });
+        cats.push({ title: "Popular", catKey: "popular", movies: mergeResults(db.filter(m => popularIdSet.has(m.id)), getTmdbMovies("popular")) });
 
         // Critically Acclaimed
         const localAcclaimed = db.filter(m => m.rating && m.rating >= 8.0);
-        const acclaimedMerged = mergeResults(localAcclaimed, getTmdbMovies("acclaimed"), 20);
+        const acclaimedMerged = mergeResults(localAcclaimed, getTmdbMovies("acclaimed"));
         if (acclaimedMerged.length > 0) cats.push({ title: "\ud83c\udfc6 Critically Acclaimed", catKey: "acclaimed", movies: acclaimedMerged });
 
         // New Releases
-        cats.push({ title: "New Releases", catKey: "newReleases", movies: mergeResults(db.filter(m => parseInt(m.year) >= 2023), getTmdbMovies("newReleases"), 20) });
+        cats.push({ title: "New Releases", catKey: "newReleases", movies: mergeResults(db.filter(m => parseInt(m.year) >= 2023), getTmdbMovies("newReleases")) });
 
         // Genre rows
-        cats.push({ title: genre1, catKey: "g1", movies: mergeResults(db.filter(m => m.genre === genre1), getTmdbMovies("g1"), 15) });
-        cats.push({ title: genre2, catKey: "g2", movies: mergeResults(db.filter(m => m.genre === genre2), getTmdbMovies("g2"), 15) });
+        cats.push({ title: genre1, catKey: "g1", movies: mergeResults(db.filter(m => m.genre === genre1), getTmdbMovies("g1")) });
+        cats.push({ title: genre2, catKey: "g2", movies: mergeResults(db.filter(m => m.genre === genre2), getTmdbMovies("g2")) });
         cats.push({ title: genre3Label, catKey: "g3", movies: mergeResults(
           isTV ? db.filter(m => m.genre === "Sci-Fi & Fantasy") : db.filter(m => m.genre === "Comedy"),
-          getTmdbMovies("g3"), 15
+          getTmdbMovies("g3")
         ) });
         if (genre4Label) {
-          cats.push({ title: genre4Label, catKey: "g4", movies: mergeResults(db.filter(m => m.genre === "Romance"), getTmdbMovies("g4"), 15) });
+          cats.push({ title: genre4Label, catKey: "g4", movies: mergeResults(db.filter(m => m.genre === "Romance"), getTmdbMovies("g4")) });
         }
 
         // Classics
         const classicYear = isTV ? 2005 : 1990;
-        cats.push({ title: "Classics", catKey: "classics", movies: mergeResults(db.filter(m => parseInt(m.year) <= classicYear), getTmdbMovies("classics"), 15) });
+        cats.push({ title: "Classics", catKey: "classics", movies: mergeResults(db.filter(m => parseInt(m.year) <= classicYear), getTmdbMovies("classics")) });
 
         return cats;
       }, [localDb, isTV, tmdbCats, rankedIds.size, rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map(m => m.id).join(",") : ""]);
