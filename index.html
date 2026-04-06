@@ -534,6 +534,27 @@
     .movie-detail-year {
       color: var(--text-muted); font-size: 0.85rem;
     }
+    .movie-detail-overview {
+      margin-top: 12px; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;
+      text-align: left; max-height: 120px; overflow-y: auto;
+    }
+    .movie-detail-meta {
+      margin-top: 10px; font-size: 0.75rem; color: var(--text-muted); text-align: left;
+    }
+    .movie-detail-meta-label {
+      color: var(--text); font-weight: 600; margin-right: 4px;
+    }
+    .movie-detail-meta-row {
+      margin-bottom: 4px; line-height: 1.4;
+    }
+    .movie-detail-rating {
+      display: inline-flex; align-items: center; gap: 4px;
+      margin-top: 6px; font-size: 0.8rem;
+    }
+    .movie-detail-rating .tmdb-star { color: #f5c518; }
+    .movie-detail-loading {
+      margin-top: 12px; text-align: center; color: var(--text-muted); font-size: 0.75rem;
+    }
     .movie-detail-rank {
       margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);
     }
@@ -3253,7 +3274,47 @@
       return <div className="toast">{message}</div>;
     }
 
-    function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList }) {
+    function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList, isTV }) {
+      var [tmdbDetail, setTmdbDetail] = useState(null);
+      var [detailLoading, setDetailLoading] = useState(false);
+
+      // Fetch TMDB details when movie changes
+      useEffect(function() {
+        if (!movie || !TMDB_API_KEY) { setTmdbDetail(null); return; }
+        // Only fetch for real TMDB IDs (not custom entries)
+        if (typeof movie.id === "string" && movie.id.indexOf("custom_") === 0) { setTmdbDetail(null); return; }
+
+        setDetailLoading(true);
+        setTmdbDetail(null);
+        var type = isTV ? "tv" : "movie";
+        var detailUrl = "https://api.themoviedb.org/3/" + type + "/" + movie.id + "?api_key=" + TMDB_API_KEY + "&language=en-US&append_to_response=credits";
+
+        fetch(detailUrl).then(function(r) { return r.json(); }).then(function(data) {
+          var director = "";
+          var cast = [];
+          if (data.credits) {
+            // For movies, director is in crew. For TV, use "created_by" or first crew with "Director"
+            var crew = data.credits.crew || [];
+            var dirEntry = crew.find(function(c) { return c.job === "Director"; });
+            if (dirEntry) {
+              director = dirEntry.name;
+            } else if (data.created_by && data.created_by.length > 0) {
+              director = data.created_by.map(function(c) { return c.name; }).join(", ");
+            }
+            cast = (data.credits.cast || []).slice(0, 5).map(function(c) { return c.name; });
+          }
+          setTmdbDetail({
+            overview: data.overview || "",
+            director: director,
+            cast: cast,
+            tmdbRating: data.vote_average || null,
+            runtime: data.runtime || (data.episode_run_time && data.episode_run_time[0]) || null,
+            seasons: data.number_of_seasons || null,
+          });
+          setDetailLoading(false);
+        }).catch(function() { setDetailLoading(false); });
+      }, [movie && movie.id, isTV]);
+
       if (!movie) return null;
       var rankIndex = rankedList ? rankedList.findIndex(function(m) { return m.id === movie.id; }) : -1;
       var isRanked = rankIndex >= 0;
@@ -3269,12 +3330,39 @@
               <div className="movie-detail-title">{movie.title}</div>
               <div className="movie-detail-year">
                 {movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}
+                {tmdbDetail && tmdbDetail.runtime ? ` \u00b7 ${tmdbDetail.runtime}m` : ""}
+                {tmdbDetail && tmdbDetail.seasons ? ` \u00b7 ${tmdbDetail.seasons} season${tmdbDetail.seasons > 1 ? "s" : ""}` : ""}
               </div>
+              {tmdbDetail && tmdbDetail.tmdbRating && (
+                <div className="movie-detail-rating">
+                  <span className="tmdb-star">&#x2605;</span> {tmdbDetail.tmdbRating.toFixed(1)}/10
+                </div>
+              )}
               {isRanked && (
                 <div className="movie-detail-rank">
                   Ranked <strong>#{rankIndex + 1}</strong> of {rankedList.length}
                   {" \u00b7 "}
                   <span className={scoreClass(score)}><strong>{score.toFixed(1)}</strong></span>
+                </div>
+              )}
+              {detailLoading && <div className="movie-detail-loading">Loading details...</div>}
+              {tmdbDetail && tmdbDetail.overview && (
+                <div className="movie-detail-overview">{tmdbDetail.overview}</div>
+              )}
+              {tmdbDetail && (tmdbDetail.director || tmdbDetail.cast.length > 0) && (
+                <div className="movie-detail-meta">
+                  {tmdbDetail.director && (
+                    <div className="movie-detail-meta-row">
+                      <span className="movie-detail-meta-label">{isTV ? "Created by" : "Director"}</span>
+                      {tmdbDetail.director}
+                    </div>
+                  )}
+                  {tmdbDetail.cast.length > 0 && (
+                    <div className="movie-detail-meta-row">
+                      <span className="movie-detail-meta-label">Cast</span>
+                      {tmdbDetail.cast.join(", ")}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -3879,7 +3967,7 @@
                 onSkip={handleCantDecide}
                 itemLabel={isTV ? "TV show" : "movie"} />
               <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)}
-                onRerank={handleRerank} onRemove={handleRemove} rankedList={activeList} />
+                onRerank={handleRerank} onRemove={handleRemove} rankedList={activeList} isTV={isTV} />
               <Toast message={toast} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
                 <div style={{color:"var(--text-muted)",fontSize:"12px",marginBottom:"8px"}}>a website by Axel Hufford</div>
@@ -4035,7 +4123,7 @@
             onSkip={handleCantDecide}
             itemLabel={isTV ? "TV show" : "movie"} />
           <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)}
-            onRerank={handleRerank} onRemove={handleRemove} rankedList={activeList} />
+            onRerank={handleRerank} onRemove={handleRemove} rankedList={activeList} isTV={isTV} />
           {showImport && (
             <LetterboxdImport
               onImport={handleLetterboxdImport}
