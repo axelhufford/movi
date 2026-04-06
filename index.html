@@ -534,6 +534,25 @@
     .movie-detail-year {
       color: var(--text-muted); font-size: 0.85rem;
     }
+    .movie-detail-rank {
+      margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);
+    }
+    .movie-detail-rank strong { color: var(--text); }
+    .movie-detail-actions {
+      display: flex; gap: 8px; padding: 0 16px 16px; justify-content: center;
+    }
+    .movie-detail-rerank {
+      background: var(--accent); color: #fff; border: none; border-radius: 10px;
+      padding: 10px 20px; font-family: 'Outfit', sans-serif; font-weight: 600;
+      font-size: 0.85rem; cursor: pointer; transition: opacity 0.2s;
+    }
+    .movie-detail-rerank:hover { opacity: 0.85; }
+    .movie-detail-remove {
+      background: none; color: var(--text-muted); border: 1px solid var(--surface2);
+      border-radius: 10px; padding: 10px 16px; font-family: 'Outfit', sans-serif;
+      font-weight: 500; font-size: 0.85rem; cursor: pointer; transition: color 0.2s, border-color 0.2s;
+    }
+    .movie-detail-remove:hover { color: var(--accent); border-color: var(--accent); }
     .movie-detail-close {
       position: absolute; top: 10px; right: 10px; z-index: 2;
       width: 30px; height: 30px; border-radius: 50%;
@@ -1755,7 +1774,7 @@
     }
 
     // ─── Search Bar ─────────────────────────────────────────────
-    function SearchBar({ onSelect, onBookmark, rankedIds, watchlistIds, localDb, searchFn, placeholder, customLabel }) {
+    function SearchBar({ onSelect, onBookmark, onRerank, rankedIds, watchlistIds, localDb, searchFn, placeholder, customLabel }) {
       const [query, setQuery] = useState("");
       const [open, setOpen] = useState(false);
       const [tmdbResults, setTmdbResults] = useState([]);
@@ -1806,7 +1825,10 @@
       }, []);
 
       function handleSelect(movie) {
-        if (rankedIds.has(movie.id)) return;
+        if (rankedIds.has(movie.id)) {
+          if (onRerank) { setQuery(""); setOpen(false); onRerank(movie); }
+          return;
+        }
         setQuery(""); setOpen(false); onSelect(movie);
       }
 
@@ -1827,14 +1849,15 @@
               {results.map(m => {
                 const isDupe = rankedIds.has(m.id);
                 return (
-                  <div key={m.id} className="search-item" style={isDupe ? { opacity: 0.5 } : {}}
+                  <div key={m.id} className="search-item" style={isDupe && !onRerank ? { opacity: 0.5 } : {}}
                     onClick={() => handleSelect(m)}>
                     <Poster poster={m.poster} title={m.title} className="search-item-poster" />
                     <div className="search-item-info">
                       <div className="search-item-title">{m.title}</div>
                       <div className="search-item-year">{m.year} &middot; {m.genre}</div>
                     </div>
-                    {isDupe && <span className="search-item-dupe">Already ranked</span>}
+                    {isDupe && onRerank && <span className="search-item-dupe" style={{color:"var(--accent)", cursor:"pointer"}}>Re-rank ↻</span>}
+                    {isDupe && !onRerank && <span className="search-item-dupe">Already ranked</span>}
                     {onBookmark && !isDupe && (
                       <button className={`bookmark-btn ${watchlistIds && watchlistIds.has(m.id) ? "bookmarked" : ""}`}
                         disabled={watchlistIds && watchlistIds.has(m.id)}
@@ -3187,8 +3210,11 @@
       return <div className="toast">{message}</div>;
     }
 
-    function MovieDetail({ movie, onClose }) {
+    function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList }) {
       if (!movie) return null;
+      var rankIndex = rankedList ? rankedList.findIndex(function(m) { return m.id === movie.id; }) : -1;
+      var isRanked = rankIndex >= 0;
+      var score = isRanked ? getScore(rankIndex, rankedList.length) : null;
       return (
         <div className="movie-detail-overlay" onClick={onClose}>
           <div className="movie-detail-box" onClick={e => e.stopPropagation()}>
@@ -3201,7 +3227,24 @@
               <div className="movie-detail-year">
                 {movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}
               </div>
+              {isRanked && (
+                <div className="movie-detail-rank">
+                  Ranked <strong>#{rankIndex + 1}</strong> of {rankedList.length}
+                  {" \u00b7 "}
+                  <span className={scoreClass(score)}><strong>{score.toFixed(1)}</strong></span>
+                </div>
+              )}
             </div>
+            {isRanked && onRerank && (
+              <div className="movie-detail-actions">
+                <button className="movie-detail-rerank" onClick={function() { onRerank(movie); onClose(); }}>
+                  Re-rank
+                </button>
+                <button className="movie-detail-remove" onClick={function() { onRemove(movie.id); onClose(); }}>
+                  Remove
+                </button>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -3662,6 +3705,37 @@
         }
       }
 
+      function handleRerank(movie) {
+        // Remove from current list, then re-insert via binary search
+        const useTV = isTV;
+        const targetList = useTV ? tvRankedList : rankedList;
+        const targetSetList = useTV ? setTvRankedList : setRankedList;
+        const targetSetSession = useTV ? setTvSession : setSession;
+
+        // Remove movie from the list
+        const filtered = targetList.filter(function(m) { return m.id !== movie.id; });
+        targetSetList(filtered);
+
+        if (filtered.length === 0) {
+          targetSetList([movie]);
+          showToast("\"" + movie.title + "\" re-ranked as #1!");
+          return;
+        }
+
+        // Start fresh binary search on the filtered list
+        var s = createSession(movie, filtered);
+        s._isTV = useTV;
+        if (s.done) {
+          var newList = filtered.slice();
+          newList.splice(s.insertIndex, 0, movie);
+          targetSetList(newList);
+          var score = getScore(s.insertIndex, newList.length);
+          showToast("\"" + movie.title + "\" re-ranked #" + (s.insertIndex + 1) + " (" + score.toFixed(1) + ")!");
+        } else {
+          targetSetSession(s);
+        }
+      }
+
       function handleCantDecide() {
         var preferNew = Math.random() < 0.5;
         handleChoice(preferNew);
@@ -3761,7 +3835,8 @@
                 onWatchlist={handleAddToWatchlistFromComparison}
                 onSkip={handleCantDecide}
                 itemLabel={isTV ? "TV show" : "movie"} />
-              <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)} />
+              <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)}
+                onRerank={handleRerank} onRemove={handleRemove} rankedList={activeList} />
               <Toast message={toast} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
                 <div style={{color:"var(--text-muted)",fontSize:"12px",marginBottom:"8px"}}>a website by Axel Hufford</div>
@@ -3837,6 +3912,7 @@
           {tab === "rank" && (
             <>
               <SearchBar onSelect={handleSelectMovie} onBookmark={handleAddToWatchlist}
+                onRerank={handleRerank}
                 rankedIds={activeIds} watchlistIds={activeWatchlistIds}
                 localDb={isTV ? TV_DB : MOVIE_DB}
                 searchFn={isTV ? searchTMDBTV : searchTMDB}
