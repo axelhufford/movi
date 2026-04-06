@@ -1549,19 +1549,53 @@
           classics: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=vote_count.desc&${isTV ? "first_air_date.lte" : "primary_release_date.lte"}=${isTV ? "2005" : "1990"}-12-31`,
         };
 
-        // Fetch for you based on user's top genres
+        // Fetch "For You" using TMDB's similar movies/shows for your top picks
         var forYouEndpoint = null;
         let forYouPromise = Promise.resolve({ movies: [], totalPages: 0, nextPage: 3 });
         if (rankedList && rankedList.length >= 3) {
-          const topHalf = rankedList.slice(0, Math.ceil(rankedList.length / 2));
-          const genreCounts = {};
-          topHalf.forEach(m => { if (m.genre) genreCounts[m.genre] = (genreCounts[m.genre] || 0) + 1; });
-          const topGenre = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0];
-          if (topGenre) {
-            const topGenreId = gIds[topGenre[0]];
-            if (topGenreId) {
-              forYouEndpoint = `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=vote_average.desc&vote_count.gte=100&with_genres=${topGenreId}`;
-              forYouPromise = fetchTMDBCategory(forYouEndpoint, rankedIds, gMap, isTV, 20);
+          // Pick up to 5 top-ranked movies with real TMDB IDs
+          var topPicks = rankedList.slice(0, 10).filter(function(m) {
+            return typeof m.id === "number" || (typeof m.id === "string" && m.id.indexOf("custom_") !== 0);
+          }).slice(0, 5);
+
+          if (topPicks.length > 0) {
+            // Fetch similar movies for each top pick in parallel
+            var similarPromises = topPicks.map(function(m) {
+              var url = base + "/" + type + "/" + m.id + "/similar?api_key=" + TMDB_API_KEY + "&language=en-US&page=1";
+              return fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+                return parseTMDBResults(data.results || [], gMap, isTV);
+              }).catch(function() { return []; });
+            });
+
+            forYouPromise = Promise.all(similarPromises).then(function(results) {
+              // Merge all similar results, dedupe, prioritize unranked
+              var seen = new Set();
+              var all = [];
+              results.forEach(function(movies) {
+                movies.forEach(function(m) {
+                  if (!seen.has(m.id) && m.poster) {
+                    seen.add(m.id);
+                    all.push(m);
+                  }
+                });
+              });
+              var unranked = all.filter(function(m) { return !rankedIds.has(m.id); });
+              var ranked = all.filter(function(m) { return rankedIds.has(m.id); });
+              var movies = unranked.concat(ranked).slice(0, 40);
+              return { movies: movies, totalPages: 1, nextPage: 2 };
+            });
+          } else {
+            // Fallback to genre-based discover if no valid TMDB IDs
+            var topHalf = rankedList.slice(0, Math.ceil(rankedList.length / 2));
+            var genreCounts = {};
+            topHalf.forEach(function(m) { if (m.genre) genreCounts[m.genre] = (genreCounts[m.genre] || 0) + 1; });
+            var topGenre = Object.entries(genreCounts).sort(function(a, b) { return b[1] - a[1]; })[0];
+            if (topGenre) {
+              var topGenreId = gIds[topGenre[0]];
+              if (topGenreId) {
+                forYouEndpoint = base + "/discover/" + type + "?api_key=" + TMDB_API_KEY + "&language=en-US&sort_by=vote_average.desc&vote_count.gte=100&with_genres=" + topGenreId;
+                forYouPromise = fetchTMDBCategory(forYouEndpoint, rankedIds, gMap, isTV, 20);
+              }
             }
           }
         }
