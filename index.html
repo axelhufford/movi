@@ -1993,6 +1993,7 @@
       const itemRectsRef = useRef([]);
       const lastClientYRef = useRef(0);
       const total = list.length;
+      const indexMap = useMemo(() => { var m = new Map(); list.forEach(function(movie, idx) { m.set(movie.id, idx); }); return m; }, [list]);
       const genres = useMemo(() => [...new Set(list.map(m => m.genre).filter(Boolean))].sort(), [list]);
       const displayList = genreFilter ? list.filter(m => m.genre === genreFilter) : list;
 
@@ -2184,7 +2185,7 @@
           )}
           <div className={"ranked-list" + (dragIndex !== null ? " is-dragging" : "")} ref={listRef}>
             {displayList.map((movie) => {
-              const i = list.indexOf(movie);
+              const i = indexMap.get(movie.id);
               const score = getScore(i, total);
               var itemClass = "ranked-item";
               if (dragIndex === i) itemClass += " dragging-source";
