@@ -1629,12 +1629,18 @@
         const forYouTitle = isTV ? "Shows You May Like" : "Movies You May Like";
 
         // Helper: merge local DB results with TMDB results, preferring unranked
-        function mergeResults(localItems, tmdbItems) {
+        // localLimit caps how many local DB items to include (prevents dumping thousands)
+        function mergeResults(localItems, tmdbItems, localLimit) {
+          var maxLocal = localLimit || 10;
+          var localUnranked = localItems.filter(m => !rankedIds.has(m.id)).slice(0, maxLocal);
           const merged = new Map();
-          localItems.filter(m => !rankedIds.has(m.id)).forEach(m => merged.set(m.id, m));
+          localUnranked.forEach(m => merged.set(m.id, m));
           (tmdbItems || []).filter(m => !rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
-          localItems.filter(m => rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
-          (tmdbItems || []).filter(m => rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
+          // Fill with ranked only if very few results
+          if (merged.size < 5) {
+            localItems.filter(m => rankedIds.has(m.id)).slice(0, 5).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
+            (tmdbItems || []).filter(m => rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
+          }
           return [...merged.values()];
         }
 
@@ -1706,11 +1712,41 @@
         );
       }
 
+      // Track how many cards each row shows (start small, grow on scroll)
+      var ROW_INITIAL = 20;
+      var ROW_STEP = 20;
+      var [rowLimits, setRowLimits] = useState({});
+
+      function getRowLimit(catKey) {
+        return rowLimits[catKey] || ROW_INITIAL;
+      }
+
+      function expandRowLimit(catKey) {
+        setRowLimits(function(prev) {
+          var cur = prev[catKey] || ROW_INITIAL;
+          var updated = Object.assign({}, prev);
+          updated[catKey] = cur + ROW_STEP;
+          return updated;
+        });
+      }
+
       // Handle horizontal scroll to load more
       function handleRowScroll(e, catKey) {
         var el = e.target;
-        if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 250) {
-          loadMoreMovies(catKey);
+        if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 300) {
+          // First expand the rendered window
+          var limit = getRowLimit(catKey);
+          var catData = tmdbCats[catKey];
+          var totalAvailable = 0;
+          for (var ci = 0; ci < categories.length; ci++) {
+            if (categories[ci].catKey === catKey) { totalAvailable = categories[ci].movies.length; break; }
+          }
+          if (limit < totalAvailable) {
+            expandRowLimit(catKey);
+          } else {
+            // Already showing all available, fetch more from TMDB
+            loadMoreMovies(catKey);
+          }
         }
       }
 
@@ -1740,14 +1776,15 @@
         <div className="recs-section">
           {categories.map(function(cat) {
             var catLoading = tmdbCats[cat.catKey] && tmdbCats[cat.catKey].loading;
-            var catHasMore = tmdbCats[cat.catKey] && tmdbCats[cat.catKey].nextPage <= tmdbCats[cat.catKey].totalPages;
+            var limit = getRowLimit(cat.catKey);
+            var visibleMovies = cat.movies.slice(0, limit);
             return (
               <div key={cat.title} className="recs-category">
                 <div className="recs-category-title" onClick={function() { setExpandedCat(cat); loadMoreMovies(cat.catKey); }}>
                   {cat.title} <span className="expand-hint">See all &rsaquo;</span>
                 </div>
                 <div className="recs-row" onScroll={function(e) { handleRowScroll(e, cat.catKey); }}>
-                  {cat.movies.map(renderCard)}
+                  {visibleMovies.map(renderCard)}
                   {catLoading && <div className="recs-row-loader"><div className="recs-spinner"></div></div>}
                 </div>
               </div>
