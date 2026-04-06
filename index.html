@@ -4033,6 +4033,8 @@
             onWatchlist={handleAddToWatchlistFromComparison}
             onSkip={handleCantDecide}
             itemLabel={isTV ? "TV show" : "movie"} />
+          <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)}
+            onRerank={handleRerank} onRemove={handleRemove} rankedList={activeList} />
           {showImport && (
             <LetterboxdImport
               onImport={handleLetterboxdImport}
