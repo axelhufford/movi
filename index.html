@@ -336,7 +336,14 @@
     .recs-category-title {
       font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: 600;
       letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px; color: var(--text-muted);
+      cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+      transition: color 0.2s;
     }
+    .recs-category-title:hover { color: var(--text); }
+    .recs-category-title .expand-hint {
+      font-size: 0.65rem; opacity: 0; transition: opacity 0.2s; color: var(--accent);
+    }
+    .recs-category-title:hover .expand-hint { opacity: 1; }
     .recs-row {
       display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px;
       scrollbar-width: thin; scrollbar-color: #333 transparent;
@@ -363,6 +370,53 @@
     .rec-card-badge {
       position: absolute; top: 6px; right: 6px; background: rgba(245, 197, 24, 0.9);
       color: #000; font-size: 0.6rem; font-weight: 700; padding: 2px 5px; border-radius: 4px;
+    }
+    .recs-row-loader {
+      flex-shrink: 0; width: 60px; display: flex; align-items: center; justify-content: center;
+    }
+    .recs-spinner {
+      width: 20px; height: 20px; border: 2px solid var(--surface2); border-top-color: var(--accent);
+      border-radius: 50%; animation: recs-spin 0.7s linear infinite;
+    }
+    @keyframes recs-spin { to { transform: rotate(360deg); } }
+
+    /* Expanded category overlay */
+    .expanded-cat-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.92); z-index: 275;
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 40px 16px; overflow-y: auto;
+    }
+    .expanded-cat-modal {
+      background: var(--bg); border: 1px solid var(--surface2); border-radius: 16px;
+      width: 100%; max-width: 820px; max-height: calc(100vh - 80px);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .expanded-cat-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px 16px; border-bottom: 1px solid var(--surface2); flex-shrink: 0;
+    }
+    .expanded-cat-header h2 {
+      font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase; color: var(--text);
+    }
+    .expanded-cat-close {
+      background: none; border: 1px solid var(--surface2); color: var(--text-muted);
+      width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+      font-size: 1rem; display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .expanded-cat-close:hover { border-color: var(--accent); color: var(--accent); }
+    .expanded-cat-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 16px; padding: 20px 24px; overflow-y: auto; flex: 1;
+    }
+    .expanded-cat-loader {
+      grid-column: 1 / -1; display: flex; justify-content: center; padding: 20px 0;
+    }
+    .expanded-cat-end {
+      grid-column: 1 / -1; text-align: center; color: var(--text-muted);
+      font-size: 0.75rem; padding: 12px 0;
     }
 
     /* Comparison */
@@ -742,6 +796,7 @@
     .day-mode .nav-tab { border-color: var(--border); }
     .day-mode .profile-subtab { border-color: var(--border); }
     .day-mode .recs-row::-webkit-scrollbar-thumb { background: #ccc; }
+    .day-mode .expanded-cat-overlay { background: rgba(0,0,0,0.6); }
     .day-mode .comparison-cancel { border-color: #ccc; }
     .day-mode .watchlist-remove { color: #999; }
     .day-mode .watchlist-remove:hover { color: var(--accent); }
@@ -813,6 +868,9 @@
       .header h1 { font-size: 1.6rem; }
       .rec-card { width: 95px; }
       .rec-card img, .rec-card .poster-placeholder { width: 95px; height: 142px; }
+      .expanded-cat-overlay { padding: 20px 8px; }
+      .expanded-cat-grid { padding: 16px 12px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); }
+      .expanded-cat-header { padding: 16px; }
       .nav-tabs { gap: 2px; }
       .nav-tab { padding: 8px 10px; font-size: 0.8rem; }
       .mode-btn { padding: 6px 14px; font-size: 0.8rem; }
@@ -1371,41 +1429,59 @@
     const TMDB_TV_GENRE_IDS = { Drama: 18, Comedy: 35, "Sci-Fi & Fantasy": 10765, "Action & Adventure": 10759, Animation: 16, Crime: 80 };
 
     // Fetch fresh unranked movies/shows from TMDB for a category
-    async function fetchTMDBCategory(endpoint, rankedIds, genreMap, isTV, limit) {
-      try {
-        // Fetch 2 pages for more variety
-        const [r1, r2] = await Promise.all([
-          fetch(endpoint + "&page=1").then(r => r.json()),
-          fetch(endpoint + "&page=" + (1 + Math.floor(Math.random() * 4))).then(r => r.json()),
-        ]);
-        const all = [...(r1.results || []), ...(r2.results || [])];
-        const items = all.map(m => ({
+    function parseTMDBResults(results, genreMap, isTV) {
+      return (results || []).map(function(m) {
+        return {
           id: m.id,
           title: isTV ? m.name : m.title,
           year: (isTV ? m.first_air_date : m.release_date || "").slice(0, 4),
           genre: m.genre_ids && m.genre_ids.length ? (genreMap[m.genre_ids[0]] || "Drama") : "Drama",
           poster: m.poster_path || null,
           rating: m.vote_average || null,
-        })).filter(m => m.poster && m.title);
+        };
+      }).filter(function(m) { return m.poster && m.title; });
+    }
+
+    async function fetchTMDBCategory(endpoint, rankedIds, genreMap, isTV, limit) {
+      try {
+        // Fetch 2 pages for initial variety
+        const [r1, r2] = await Promise.all([
+          fetch(endpoint + "&page=1").then(r => r.json()),
+          fetch(endpoint + "&page=2").then(r => r.json()),
+        ]);
+        var totalPages = r1.total_pages || 1;
+        const all = parseTMDBResults([].concat(r1.results || [], r2.results || []), genreMap, isTV);
         // Dedupe
         const seen = new Set();
-        const unique = items.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+        const unique = all.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
         // Unranked first, then ranked
         const unranked = unique.filter(m => !rankedIds.has(m.id));
         const ranked = unique.filter(m => rankedIds.has(m.id));
-        return [...unranked, ...ranked].slice(0, limit || 20);
-      } catch (e) { return []; }
+        return { movies: [...unranked, ...ranked].slice(0, limit || 20), totalPages: totalPages, nextPage: 3 };
+      } catch (e) { return { movies: [], totalPages: 0, nextPage: 3 }; }
+    }
+
+    async function fetchTMDBPage(endpoint, page, genreMap, isTV, existingIds) {
+      try {
+        var r = await fetch(endpoint + "&page=" + page).then(function(r) { return r.json(); });
+        var items = parseTMDBResults(r.results, genreMap, isTV);
+        // Dedupe against existing
+        var fresh = items.filter(function(m) { return !existingIds.has(m.id); });
+        return { movies: fresh, totalPages: r.total_pages || 1 };
+      } catch (e) { return { movies: [], totalPages: 0 }; }
     }
 
     function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, rankedList, localDb, mode }) {
       const isTV = mode === "tv";
       const [tmdbCats, setTmdbCats] = useState({});
+      const [expandedCat, setExpandedCat] = useState(null);
       const rankedCountRef = useRef(0);
+      const endpointsRef = useRef({});
 
       // Fetch fresh TMDB data for all categories
       useEffect(() => {
         if (!TMDB_API_KEY) return;
-        const base = isTV ? "https://api.themoviedb.org/3" : "https://api.themoviedb.org/3";
+        const base = "https://api.themoviedb.org/3";
         const type = isTV ? "tv" : "movie";
         const gMap = isTV ? TV_GENRE_MAP : GENRE_MAP;
         const gIds = isTV ? TMDB_TV_GENRE_IDS : TMDB_GENRE_IDS;
@@ -1429,7 +1505,8 @@
         };
 
         // Fetch for you based on user's top genres
-        let forYouPromise = Promise.resolve([]);
+        var forYouEndpoint = null;
+        let forYouPromise = Promise.resolve({ movies: [], totalPages: 0, nextPage: 3 });
         if (rankedList && rankedList.length >= 3) {
           const topHalf = rankedList.slice(0, Math.ceil(rankedList.length / 2));
           const genreCounts = {};
@@ -1438,12 +1515,16 @@
           if (topGenre) {
             const topGenreId = gIds[topGenre[0]];
             if (topGenreId) {
-              const fyEndpoint = `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=vote_average.desc&vote_count.gte=100&with_genres=${topGenreId}`;
-              forYouPromise = fetchTMDBCategory(fyEndpoint, rankedIds, gMap, isTV, 20);
+              forYouEndpoint = `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=vote_average.desc&vote_count.gte=100&with_genres=${topGenreId}`;
+              forYouPromise = fetchTMDBCategory(forYouEndpoint, rankedIds, gMap, isTV, 20);
             }
           }
         }
 
+        // Store endpoints for pagination
+        endpointsRef.current = Object.assign({}, endpoints, { forYou: forYouEndpoint, _gMap: gMap, _isTV: isTV });
+
+        var emptyResult = { movies: [], totalPages: 0, nextPage: 3 };
         Promise.all([
           forYouPromise,
           fetchTMDBCategory(endpoints.popular, rankedIds, gMap, isTV, 20),
@@ -1452,14 +1533,73 @@
           fetchTMDBCategory(endpoints.genre1, rankedIds, gMap, isTV, 15),
           fetchTMDBCategory(endpoints.genre2, rankedIds, gMap, isTV, 15),
           fetchTMDBCategory(endpoints.genre3, rankedIds, gMap, isTV, 15),
-          endpoints.genre4 ? fetchTMDBCategory(endpoints.genre4, rankedIds, gMap, isTV, 15) : Promise.resolve([]),
+          endpoints.genre4 ? fetchTMDBCategory(endpoints.genre4, rankedIds, gMap, isTV, 15) : Promise.resolve(emptyResult),
           fetchTMDBCategory(endpoints.classics, rankedIds, gMap, isTV, 15),
-        ]).then(([forYou, popular, acclaimed, newReleases, g1, g2, g3, g4, classics]) => {
-          setTmdbCats({ forYou, popular, acclaimed, newReleases, g1, g2, g3, g4, classics });
+        ]).then(function(results) {
+          var keys = ["forYou", "popular", "acclaimed", "newReleases", "g1", "g2", "g3", "g4", "classics"];
+          var epKeys = ["forYou", "popular", "acclaimed", "newReleases", "genre1", "genre2", "genre3", "genre4", "classics"];
+          var state = {};
+          keys.forEach(function(k, i) {
+            var r = results[i];
+            state[k] = { movies: r.movies, totalPages: r.totalPages, nextPage: r.nextPage, loading: false, endpoint: endpointsRef.current[epKeys[i]] || null };
+          });
+          setTmdbCats(state);
         });
 
         rankedCountRef.current = rankedIds.size;
       }, [isTV, rankedIds.size]);
+
+      // Close expanded view on Escape
+      useEffect(function() {
+        function handleKey(e) { if (e.key === "Escape") setExpandedCat(null); }
+        document.addEventListener("keydown", handleKey);
+        return function() { document.removeEventListener("keydown", handleKey); };
+      }, []);
+
+      // Load more movies for a category (with throttle)
+      var loadThrottleRef = useRef({});
+      function loadMoreMovies(catKey) {
+        var now = Date.now();
+        if (loadThrottleRef.current[catKey] && now - loadThrottleRef.current[catKey] < 800) return;
+        loadThrottleRef.current[catKey] = now;
+
+        var catData = tmdbCats[catKey];
+        if (!catData || !catData.endpoint || catData.loading) return;
+        if (catData.nextPage > catData.totalPages) return;
+        var ep = endpointsRef.current;
+        var gMap = ep._gMap;
+        var tvMode = ep._isTV;
+
+        // Set loading
+        setTmdbCats(function(prev) {
+          var updated = Object.assign({}, prev);
+          updated[catKey] = Object.assign({}, updated[catKey], { loading: true });
+          return updated;
+        });
+
+        var existingIds = new Set((catData.movies || []).map(function(m) { return m.id; }));
+        fetchTMDBPage(catData.endpoint, catData.nextPage, gMap, tvMode, existingIds).then(function(result) {
+          setTmdbCats(function(prev) {
+            var old = prev[catKey];
+            if (!old) return prev;
+            var updated = Object.assign({}, prev);
+            updated[catKey] = Object.assign({}, old, {
+              movies: old.movies.concat(result.movies),
+              nextPage: old.nextPage + 1,
+              totalPages: result.totalPages || old.totalPages,
+              loading: false,
+            });
+            return updated;
+          });
+        });
+      }
+
+      // Helper to get movies array from tmdbCats (handles new structure)
+      function getTmdbMovies(key) {
+        var d = tmdbCats[key];
+        if (!d) return [];
+        return d.movies || d;
+      }
 
       const categories = useMemo(() => {
         const db = localDb;
@@ -1472,14 +1612,11 @@
         // Helper: merge local DB results with TMDB results, preferring unranked
         function mergeResults(localItems, tmdbItems, limit) {
           const merged = new Map();
-          // Add local unranked first
           localItems.filter(m => !rankedIds.has(m.id)).forEach(m => merged.set(m.id, m));
-          // Add TMDB unranked
           (tmdbItems || []).filter(m => !rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
-          // Fill with ranked if needed
           localItems.filter(m => rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
           (tmdbItems || []).filter(m => rankedIds.has(m.id)).forEach(m => { if (!merged.has(m.id)) merged.set(m.id, m); });
-          return shuffle([...merged.values()].slice(0, limit));
+          return [...merged.values()].slice(0, limit);
         }
 
         const popularIds = isTV ? POPULAR_TV_IDS : POPULAR_MOVIE_IDS;
@@ -1501,62 +1638,118 @@
           const topDecades = Object.entries(decadeCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => Number(e[0]));
           return db.filter(m => !rankedIds.has(m.id) && (topGenres.includes(m.genre) || topDecades.includes(Math.floor(parseInt(m.year) / 10) * 10)));
         })() : [];
-        const forYou = mergeResults(localForYou, tmdbCats.forYou, 20);
-        if (forYou.length > 0) cats.push({ title: forYouTitle, movies: forYou });
+        const forYou = mergeResults(localForYou, getTmdbMovies("forYou"), 20);
+        if (forYou.length > 0) cats.push({ title: forYouTitle, catKey: "forYou", movies: forYou });
 
         // Popular
-        cats.push({ title: "Popular", movies: mergeResults(db.filter(m => popularIdSet.has(m.id)), tmdbCats.popular, 20) });
+        cats.push({ title: "Popular", catKey: "popular", movies: mergeResults(db.filter(m => popularIdSet.has(m.id)), getTmdbMovies("popular"), 20) });
 
         // Critically Acclaimed
         const localAcclaimed = db.filter(m => m.rating && m.rating >= 8.0);
-        const acclaimedMerged = mergeResults(localAcclaimed, tmdbCats.acclaimed, 20);
-        if (acclaimedMerged.length > 0) cats.push({ title: "🏆 Critically Acclaimed", movies: acclaimedMerged });
+        const acclaimedMerged = mergeResults(localAcclaimed, getTmdbMovies("acclaimed"), 20);
+        if (acclaimedMerged.length > 0) cats.push({ title: "\ud83c\udfc6 Critically Acclaimed", catKey: "acclaimed", movies: acclaimedMerged });
 
         // New Releases
-        cats.push({ title: "New Releases", movies: mergeResults(db.filter(m => parseInt(m.year) >= 2023), tmdbCats.newReleases, 20) });
+        cats.push({ title: "New Releases", catKey: "newReleases", movies: mergeResults(db.filter(m => parseInt(m.year) >= 2023), getTmdbMovies("newReleases"), 20) });
 
         // Genre rows
-        cats.push({ title: genre1, movies: mergeResults(db.filter(m => m.genre === genre1), tmdbCats.g1, 15) });
-        cats.push({ title: genre2, movies: mergeResults(db.filter(m => m.genre === genre2), tmdbCats.g2, 15) });
-        cats.push({ title: genre3Label, movies: mergeResults(
+        cats.push({ title: genre1, catKey: "g1", movies: mergeResults(db.filter(m => m.genre === genre1), getTmdbMovies("g1"), 15) });
+        cats.push({ title: genre2, catKey: "g2", movies: mergeResults(db.filter(m => m.genre === genre2), getTmdbMovies("g2"), 15) });
+        cats.push({ title: genre3Label, catKey: "g3", movies: mergeResults(
           isTV ? db.filter(m => m.genre === "Sci-Fi & Fantasy") : db.filter(m => m.genre === "Comedy"),
-          tmdbCats.g3, 15
+          getTmdbMovies("g3"), 15
         ) });
         if (genre4Label) {
-          cats.push({ title: genre4Label, movies: mergeResults(db.filter(m => m.genre === "Romance"), tmdbCats.g4, 15) });
+          cats.push({ title: genre4Label, catKey: "g4", movies: mergeResults(db.filter(m => m.genre === "Romance"), getTmdbMovies("g4"), 15) });
         }
 
         // Classics
         const classicYear = isTV ? 2005 : 1990;
-        cats.push({ title: "Classics", movies: mergeResults(db.filter(m => parseInt(m.year) <= classicYear), tmdbCats.classics, 15) });
+        cats.push({ title: "Classics", catKey: "classics", movies: mergeResults(db.filter(m => parseInt(m.year) <= classicYear), getTmdbMovies("classics"), 15) });
 
         return cats;
       }, [localDb, isTV, tmdbCats, rankedIds.size, rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map(m => m.id).join(",") : ""]);
 
+      // Render a single movie card (shared between row and expanded grid)
+      function renderCard(m) {
+        var isRanked = rankedIds.has(m.id);
+        var isWatchlisted = watchlistIds && watchlistIds.has(m.id);
+        return (
+          <div key={m.id} className={"rec-card" + (isRanked ? " ranked" : "")}
+            onClick={function() { if (!isRanked && !isWatchlisted) onSelect(m); }}>
+            {isRanked && <div className="rec-card-badge">Ranked</div>}
+            {isWatchlisted && <div className="rec-card-badge" style={{background:"rgba(245,197,24,0.9)"}}>&#x2605;</div>}
+            <Poster poster={m.poster} title={m.title}
+              style={{ width: "100%", height: "auto", aspectRatio: "2/3", borderRadius: 8 }} />
+            <div className="rec-card-title">{m.title}</div>
+            <div className="rec-card-year">{m.year}</div>
+          </div>
+        );
+      }
+
+      // Handle horizontal scroll to load more
+      function handleRowScroll(e, catKey) {
+        var el = e.target;
+        if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 250) {
+          loadMoreMovies(catKey);
+        }
+      }
+
+      // Handle expanded grid scroll to load more
+      function handleGridScroll(e, catKey) {
+        var el = e.target;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
+          loadMoreMovies(catKey);
+        }
+      }
+
+      // Get all movies for expanded view (merged local + all TMDB pages)
+      function getExpandedMovies(cat) {
+        var tmdbData = tmdbCats[cat.catKey];
+        var tmdbMovies = tmdbData ? (tmdbData.movies || []) : [];
+        // Merge: start with the category's base movies, then add any extra TMDB movies not already included
+        var seen = new Set(cat.movies.map(function(m) { return m.id; }));
+        var extra = tmdbMovies.filter(function(m) { return !seen.has(m.id); });
+        return cat.movies.concat(extra);
+      }
+
+      var catData = expandedCat ? tmdbCats[expandedCat.catKey] : null;
+      var isLoadingExpanded = catData && catData.loading;
+      var hasMoreExpanded = catData && catData.nextPage <= catData.totalPages;
+
       return (
         <div className="recs-section">
-          {categories.map(cat => (
-            <div key={cat.title} className="recs-category">
-              <div className="recs-category-title">{cat.title}</div>
-              <div className="recs-row">
-                {cat.movies.map(m => {
-                  const isRanked = rankedIds.has(m.id);
-                  const isWatchlisted = watchlistIds && watchlistIds.has(m.id);
-                  return (
-                    <div key={m.id} className={`rec-card ${isRanked ? "ranked" : ""}`}
-                      onClick={() => !isRanked && !isWatchlisted && onSelect(m)}>
-                      {isRanked && <div className="rec-card-badge">Ranked</div>}
-                      {isWatchlisted && <div className="rec-card-badge" style={{background:"rgba(245,197,24,0.9)"}}>&#x2605;</div>}
-                      <Poster poster={m.poster} title={m.title}
-                        style={{ width: "100%", height: "auto", aspectRatio: "2/3", borderRadius: 8 }} />
-                      <div className="rec-card-title">{m.title}</div>
-                      <div className="rec-card-year">{m.year}</div>
-                    </div>
-                  );
-                })}
+          {categories.map(function(cat) {
+            var catLoading = tmdbCats[cat.catKey] && tmdbCats[cat.catKey].loading;
+            var catHasMore = tmdbCats[cat.catKey] && tmdbCats[cat.catKey].nextPage <= tmdbCats[cat.catKey].totalPages;
+            return (
+              <div key={cat.title} className="recs-category">
+                <div className="recs-category-title" onClick={function() { setExpandedCat(cat); loadMoreMovies(cat.catKey); }}>
+                  {cat.title} <span className="expand-hint">See all &rsaquo;</span>
+                </div>
+                <div className="recs-row" onScroll={function(e) { handleRowScroll(e, cat.catKey); }}>
+                  {cat.movies.map(renderCard)}
+                  {catLoading && <div className="recs-row-loader"><div className="recs-spinner"></div></div>}
+                </div>
+              </div>
+            );
+          })}
+
+          {expandedCat && (
+            <div className="expanded-cat-overlay" onClick={function() { setExpandedCat(null); }}>
+              <div className="expanded-cat-modal" onClick={function(e) { e.stopPropagation(); }}>
+                <div className="expanded-cat-header">
+                  <h2>{expandedCat.title}</h2>
+                  <button className="expanded-cat-close" onClick={function() { setExpandedCat(null); }}>&times;</button>
+                </div>
+                <div className="expanded-cat-grid" onScroll={function(e) { handleGridScroll(e, expandedCat.catKey); }}>
+                  {getExpandedMovies(expandedCat).map(renderCard)}
+                  {isLoadingExpanded && <div className="expanded-cat-loader"><div className="recs-spinner"></div></div>}
+                  {!isLoadingExpanded && !hasMoreExpanded && <div className="expanded-cat-end">That's all!</div>}
+                </div>
               </div>
             </div>
-          ))}
+          )}
         </div>
       );
     }
