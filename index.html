@@ -1695,7 +1695,7 @@
         var isWatchlisted = watchlistIds && watchlistIds.has(m.id);
         return (
           <div key={m.id} className={"rec-card" + (isRanked ? " ranked" : "")}
-            onClick={function() { if (!isRanked && !isWatchlisted) onSelect(m); }}>
+            onClick={function() { if (!isRanked && !isWatchlisted) { setExpandedCat(null); onSelect(m); } }}>
             {isRanked && <div className="rec-card-badge">Ranked</div>}
             {isWatchlisted && <div className="rec-card-badge" style={{background:"rgba(245,197,24,0.9)"}}>&#x2605;</div>}
             <Poster poster={m.poster} title={m.title}
