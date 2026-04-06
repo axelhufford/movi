@@ -1224,10 +1224,13 @@
       if (!db) return;
       try {
         await db.collection("activity").add(event);
+        _lastActivityWrite = Date.now();
       } catch (e) {
         console.error("Failed to write activity:", e);
       }
     }
+
+    var _lastActivityWrite = 0;
 
     async function saveProfile(user, rankedList, tvRankedList, watchlist, tvWatchlist, isPrivate) {
       if (!db || !user) return;
@@ -1254,10 +1257,9 @@
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        // Throttle: skip activity if last update was < 30s ago
-        var lastUpdate = oldData && oldData.updatedAt ? oldData.updatedAt.toDate() : null;
-        var tooSoon = lastUpdate && (Date.now() - lastUpdate.getTime()) < 30000;
-        if (tooSoon) return;
+        // Throttle activity writes: max once per 30s (client-side tracking)
+        var now = Date.now();
+        if (now - _lastActivityWrite < 30000) return;
 
         var baseEvent = {
           uid: user.uid,
