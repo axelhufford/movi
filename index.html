@@ -1615,6 +1615,10 @@
         var gMap = ep._gMap;
         var tvMode = ep._isTV;
 
+        // Capture what we need before async work
+        var endpoint = catData.endpoint;
+        var pageToFetch = catData.nextPage;
+
         // Set loading
         setTmdbCats(function(prev) {
           var updated = Object.assign({}, prev);
@@ -1622,14 +1626,18 @@
           return updated;
         });
 
+        // Build existingIds from fresh state inside the updater callback
         var existingIds = new Set((catData.movies || []).map(function(m) { return m.id; }));
-        fetchTMDBPage(catData.endpoint, catData.nextPage, gMap, tvMode, existingIds).then(function(result) {
+        fetchTMDBPage(endpoint, pageToFetch, gMap, tvMode, existingIds).then(function(result) {
           setTmdbCats(function(prev) {
             var old = prev[catKey];
             if (!old) return prev;
+            // Dedupe against current state (not stale closure)
+            var currentIds = new Set(old.movies.map(function(m) { return m.id; }));
+            var fresh = result.movies.filter(function(m) { return !currentIds.has(m.id); });
             var updated = Object.assign({}, prev);
             updated[catKey] = Object.assign({}, old, {
-              movies: old.movies.concat(result.movies),
+              movies: old.movies.concat(fresh),
               nextPage: old.nextPage + 1,
               totalPages: result.totalPages || old.totalPages,
               loading: false,
@@ -1784,19 +1792,22 @@
         }
       }
 
-      // Get all movies for expanded view (merged local + all TMDB pages)
-      function getExpandedMovies(cat) {
-        var tmdbData = tmdbCats[cat.catKey];
+      // Get fresh category from categories array (avoids stale expandedCat reference)
+      var freshExpandedCat = expandedCat ? categories.find(function(c) { return c.catKey === expandedCat.catKey; }) || expandedCat : null;
+
+      // Get all movies for expanded view (merged fresh category + all TMDB pages)
+      function getExpandedMovies() {
+        if (!freshExpandedCat) return [];
+        var tmdbData = tmdbCats[freshExpandedCat.catKey];
         var tmdbMovies = tmdbData ? (tmdbData.movies || []) : [];
-        // Merge: start with the category's base movies, then add any extra TMDB movies not already included
-        var seen = new Set(cat.movies.map(function(m) { return m.id; }));
+        var seen = new Set(freshExpandedCat.movies.map(function(m) { return m.id; }));
         var extra = tmdbMovies.filter(function(m) { return !seen.has(m.id); });
-        return cat.movies.concat(extra);
+        return freshExpandedCat.movies.concat(extra);
       }
 
-      var catData = expandedCat ? tmdbCats[expandedCat.catKey] : null;
-      var isLoadingExpanded = catData && catData.loading;
-      var hasMoreExpanded = catData && catData.nextPage <= catData.totalPages;
+      var expandedTmdbData = freshExpandedCat ? tmdbCats[freshExpandedCat.catKey] : null;
+      var isLoadingExpanded = expandedTmdbData && expandedTmdbData.loading;
+      var hasMoreExpanded = expandedTmdbData && expandedTmdbData.nextPage <= expandedTmdbData.totalPages;
 
       return (
         <div className="recs-section">
@@ -1817,15 +1828,15 @@
             );
           })}
 
-          {expandedCat && (
+          {freshExpandedCat && (
             <div className="expanded-cat-overlay" onClick={function() { setExpandedCat(null); }}>
               <div className="expanded-cat-modal" onClick={function(e) { e.stopPropagation(); }}>
                 <div className="expanded-cat-header">
-                  <h2>{expandedCat.title}</h2>
+                  <h2>{freshExpandedCat.title}</h2>
                   <button className="expanded-cat-close" onClick={function() { setExpandedCat(null); }}>&times;</button>
                 </div>
-                <div className="expanded-cat-grid" onScroll={function(e) { handleGridScroll(e, expandedCat.catKey); }}>
-                  {getExpandedMovies(expandedCat).map(renderCard)}
+                <div className="expanded-cat-grid" onScroll={function(e) { handleGridScroll(e, freshExpandedCat.catKey); }}>
+                  {getExpandedMovies().map(renderCard)}
                   {isLoadingExpanded && <div className="expanded-cat-loader"><div className="recs-spinner"></div></div>}
                   {!isLoadingExpanded && !hasMoreExpanded && <div className="expanded-cat-end">That's all!</div>}
                 </div>
@@ -2208,7 +2219,7 @@
           )}
           <div className={"ranked-list" + (dragIndex !== null ? " is-dragging" : "")} ref={listRef}>
             {displayList.map((movie) => {
-              const i = indexMap.get(movie.id);
+              var i = indexMap.has(movie.id) ? indexMap.get(movie.id) : list.indexOf(movie);
               const score = getScore(i, total);
               var itemClass = "ranked-item";
               if (dragIndex === i) itemClass += " dragging-source";
