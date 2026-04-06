@@ -637,6 +637,9 @@
     .ranked-item:nth-child(3) .rank-number { color: #cd7f32; }
     .ranked-poster { width: 40px; height: 60px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
     .ranked-poster-ph { width: 40px; height: 60px; border-radius: 6px; }
+    .ranked-item-tap {
+      display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer;
+    }
     .ranked-item-info { flex: 1; min-width: 0; }
     .ranked-item-title { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ranked-item-year { color: var(--text-muted); font-size: 0.75rem; }
@@ -2187,15 +2190,17 @@
               if (dragIndex === i) itemClass += " dragging-source";
               if (overIndex === i && overIndex !== dragIndex) itemClass += " drop-before";
               return (
-                <div key={movie.id} className={itemClass} onClick={() => onMovieClick && onMovieClick(movie)}>
-                  <div className="rank-number">{i + 1}</div>
-                  <Poster poster={movie.poster} title={movie.title}
-                    className={movie.poster ? "ranked-poster" : "ranked-poster-ph poster-placeholder"} />
-                  <div className="ranked-item-info">
-                    <div className="ranked-item-title">{movie.title}</div>
-                    <div className="ranked-item-year">{movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}</div>
+                <div key={movie.id} className={itemClass}>
+                  <div className="ranked-item-tap" onClick={() => onMovieClick && onMovieClick(movie)}>
+                    <div className="rank-number">{i + 1}</div>
+                    <Poster poster={movie.poster} title={movie.title}
+                      className={movie.poster ? "ranked-poster" : "ranked-poster-ph poster-placeholder"} />
+                    <div className="ranked-item-info">
+                      <div className="ranked-item-title">{movie.title}</div>
+                      <div className="ranked-item-year">{movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}</div>
+                    </div>
+                    <div className={`score-badge ${scoreClass(score)}`}>{score.toFixed(1)}</div>
                   </div>
-                  <div className={`score-badge ${scoreClass(score)}`}>{score.toFixed(1)}</div>
                   {!readOnly && onMove && (
                     <div className="drag-handle"
                       onPointerDown={(e) => handleDragStart(e, i)}
