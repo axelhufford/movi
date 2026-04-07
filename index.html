@@ -87,11 +87,11 @@
     }
     .tv-mode .logo-tv-sub { display: block; }
     .tv-mode .logo-frame.active {
-      border-color: var(--accent); background: rgba(0,105,62,0.1);
-      box-shadow: 0 0 20px rgba(0,105,62,0.25);
+      border-color: var(--accent); background: rgba(0,135,90,0.1);
+      box-shadow: 0 0 20px rgba(0,135,90,0.25);
     }
     .tv-mode .logo-frame.active .frame-num { color: var(--accent); }
-    .tv-mode .logo-frame.active .sprocket { background: rgba(0,105,62,0.35); }
+    .tv-mode .logo-frame.active .sprocket { background: rgba(0,135,90,0.35); }
 
     /* Auth Bar */
     .auth-bar {
@@ -641,6 +641,13 @@
     }
     .ranked-empty p:first-child { font-size: 2rem; margin-bottom: 10px; }
     .ranked-list { display: flex; flex-direction: column; gap: 6px; }
+    .show-more-ranked {
+      display: block; width: 100%; margin-top: 12px; padding: 12px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      color: var(--text-muted); font-size: 0.85rem; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; text-align: center;
+    }
+    .show-more-ranked:hover { border-color: var(--accent); color: var(--accent); }
     .ranked-item {
       display: flex; align-items: center; gap: 12px; padding: 10px 14px;
       background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -828,6 +835,12 @@
       border-color: rgba(0,0,0,0.13);
       background: rgba(0,0,0,0.025);
     }
+    .day-mode .logo-frame.active {
+      border-color: var(--accent); background: rgba(255,77,77,0.08);
+      box-shadow: 0 0 20px rgba(255,77,77,0.18);
+    }
+    .day-mode .logo-frame.active .frame-num { color: var(--accent); }
+    .day-mode .logo-frame.active .sprocket { background: rgba(255,77,77,0.28); }
     .day-mode .logo-frame .frame-num { color: rgba(0,0,0,0.25); }
     .day-mode .logo-frame .sprocket { background: rgba(0,0,0,0.08); }
     .day-mode .auth-btn-signout { background: var(--surface2); color: var(--text-dim); }
@@ -2076,6 +2089,8 @@
       const [genreFilter, setGenreFilter] = useState(null);
       const [dragIndex, setDragIndex] = useState(null);
       const [overIndex, setOverIndex] = useState(null);
+      const [rankShowAll, setRankShowAll] = useState(false);
+      const RANK_INITIAL_LIMIT = 50;
       const listRef = useRef(null);
       const isDraggingRef = useRef(false);
       const startPosRef = useRef({ x: 0, y: 0, index: null });
@@ -2086,7 +2101,9 @@
       const total = list.length;
       const indexMap = useMemo(() => { var m = new Map(); list.forEach(function(movie, idx) { m.set(movie.id, idx); }); return m; }, [list]);
       const genres = useMemo(() => [...new Set(list.map(m => m.genre).filter(Boolean))].sort(), [list]);
-      const displayList = genreFilter ? list.filter(m => m.genre === genreFilter) : list;
+      const filteredList = genreFilter ? list.filter(m => m.genre === genreFilter) : list;
+      const displayList = (!rankShowAll && filteredList.length > RANK_INITIAL_LIMIT) ? filteredList.slice(0, RANK_INITIAL_LIMIT) : filteredList;
+      const hasMoreRanked = filteredList.length > RANK_INITIAL_LIMIT && !rankShowAll;
 
       useEffect(() => {
         return () => {
@@ -2322,6 +2339,16 @@
               );
             })}
           </div>
+          {hasMoreRanked && (
+            <button className="show-more-ranked" onClick={() => setRankShowAll(true)}>
+              Show all {filteredList.length} rankings &#x25BC;
+            </button>
+          )}
+          {rankShowAll && filteredList.length > RANK_INITIAL_LIMIT && (
+            <button className="show-more-ranked" onClick={() => setRankShowAll(false)}>
+              Show less &#x25B2;
+            </button>
+          )}
           {confirmClear && (
             <div className="confirm-overlay">
               <div className="confirm-box">
