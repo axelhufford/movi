@@ -2206,11 +2206,19 @@
 
       function handleDragEnd(e) {
         if (isDraggingRef.current && startPosRef.current.index !== null && onMove) {
-          var from = startPosRef.current.index;
-          var to = overIndex;
-          if (to !== null && to !== from && to !== from + 1) {
-            var target = to > from ? to - 1 : to;
-            onMove(from, target);
+          var fromDisplay = startPosRef.current.index;
+          var toDisplay = overIndex;
+          if (toDisplay !== null && toDisplay !== fromDisplay && toDisplay !== fromDisplay + 1) {
+            var draggedId = displayList[fromDisplay].id;
+            var beforeId = null;
+            if (toDisplay < displayList.length) {
+              var idx = toDisplay;
+              if (idx === fromDisplay) idx++;
+              if (idx < displayList.length) {
+                beforeId = displayList[idx].id;
+              }
+            }
+            onMove(draggedId, beforeId);
           }
         }
         removeClone();
@@ -2292,12 +2300,12 @@
             </div>
           )}
           <div className={"ranked-list" + (dragIndex !== null ? " is-dragging" : "")} ref={listRef}>
-            {displayList.map((movie) => {
+            {displayList.map((movie, displayIdx) => {
               var i = indexMap.has(movie.id) ? indexMap.get(movie.id) : list.indexOf(movie);
               const score = getScore(i, total);
               var itemClass = "ranked-item";
-              if (dragIndex === i) itemClass += " dragging-source";
-              if (overIndex === i && overIndex !== dragIndex) itemClass += " drop-before";
+              if (dragIndex === displayIdx) itemClass += " dragging-source";
+              if (overIndex === displayIdx && overIndex !== dragIndex) itemClass += " drop-before";
               return (
                 <div key={movie.id} className={itemClass}>
                   <div className="ranked-item-tap" onClick={() => onMovieClick && onMovieClick(movie)}>
@@ -2312,7 +2320,7 @@
                   </div>
                   {!readOnly && onMove && (
                     <div className="drag-handle"
-                      onPointerDown={(e) => handleDragStart(e, i)}
+                      onPointerDown={(e) => handleDragStart(e, displayIdx)}
                       onPointerMove={handleDragMove}
                       onPointerUp={handleDragEnd}
                       onPointerCancel={handleDragCancel}
@@ -3993,10 +4001,27 @@
 
       function handleRemove(id) { setActiveList(prev => prev.filter(m => m.id !== id)); }
       function handleClear() { setActiveList([]); }
-      function handleMove(fromIdx, toIdx) {
-        setActiveList(prev => {
-          const next = [...prev];
-          const [item] = next.splice(fromIdx, 1);
+      function handleMove(draggedId, beforeId) {
+        setActiveList(function(prev) {
+          var next = prev.slice();
+          var fromIdx = -1;
+          for (var fi = 0; fi < next.length; fi++) {
+            if (next[fi].id === draggedId) { fromIdx = fi; break; }
+          }
+          if (fromIdx === -1) return prev;
+          var item = next.splice(fromIdx, 1)[0];
+          if (beforeId === null) {
+            next.push(item);
+            return next;
+          }
+          var toIdx = -1;
+          for (var ti = 0; ti < next.length; ti++) {
+            if (next[ti].id === beforeId) { toIdx = ti; break; }
+          }
+          if (toIdx === -1) {
+            next.push(item);
+            return next;
+          }
           next.splice(toIdx, 0, item);
           return next;
         });
