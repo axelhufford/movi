@@ -1098,6 +1098,8 @@
     const TMDB_IMG_LG = "https://image.tmdb.org/t/p/w300";
     const TMDB_API_KEY = "39a17d2f20e6ebc19af8eadbf015f5ab";
     const TMDB_SEARCH_URL = "https://api.themoviedb.org/3/search/movie";
+    // Rolling cutoff for "New Releases" — anything from the previous calendar year onward.
+    const NEW_RELEASE_YEAR = new Date().getFullYear() - 1;
 
     const GENRE_MAP = {28:"Action",12:"Adventure",16:"Animation",35:"Comedy",80:"Crime",99:"Documentary",18:"Drama",10751:"Family",14:"Fantasy",36:"History",27:"Horror",10402:"Music",9648:"Mystery",10749:"Romance",878:"Sci-Fi",10770:"TV Movie",53:"Thriller",10752:"War",37:"Western"};
     const TV_GENRE_MAP = {10759:"Action & Adventure",16:"Animation",35:"Comedy",80:"Crime",99:"Documentary",18:"Drama",10751:"Family",10762:"Kids",9648:"Mystery",10763:"News",10764:"Reality",10765:"Sci-Fi & Fantasy",10766:"Soap",10767:"Talk",10768:"War & Politics",37:"Western"};
@@ -1175,6 +1177,30 @@
     }
 
     // ─── Letterboxd Import ──────────────────────────────────────
+    // Parse a single CSV line preserving empty fields and handling quoted
+    // segments (including escaped double quotes). The regex previously used
+    // collapsed consecutive commas, which misaligned columns whenever a
+    // field like Year was blank.
+    function splitCsvLine(line) {
+      const out = [];
+      let cur = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+          if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+          else if (ch === '"') { inQuotes = false; }
+          else { cur += ch; }
+        } else {
+          if (ch === ',') { out.push(cur); cur = ""; }
+          else if (ch === '"') { inQuotes = true; }
+          else { cur += ch; }
+        }
+      }
+      out.push(cur);
+      return out;
+    }
+
     async function extractLetterboxdRatings(file) {
       let csvText;
       if (file.name.endsWith(".zip")) {
@@ -1188,18 +1214,18 @@
       const lines = csvText.split("\n").map(l => l.trim()).filter(l => l);
       if (lines.length < 2) throw new Error("CSV file is empty");
       // Parse header to find column indices
-      const header = lines[0].split(",").map(h => h.trim().toLowerCase());
+      const header = splitCsvLine(lines[0]).map(h => h.trim().toLowerCase());
       const nameIdx = header.indexOf("name");
       const yearIdx = header.indexOf("year");
       const ratingIdx = header.indexOf("rating");
       if (nameIdx === -1 || ratingIdx === -1) throw new Error("CSV missing Name or Rating columns");
       const entries = [];
       for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].match(/(".*?"|[^,]+)/g);
-        if (!cols) continue;
-        const name = (cols[nameIdx] || "").replace(/^"|"$/g, "").trim();
-        const year = yearIdx !== -1 ? (cols[yearIdx] || "").replace(/^"|"$/g, "").trim() : "";
-        const rating = parseFloat((cols[ratingIdx] || "0").replace(/^"|"$/g, ""));
+        const cols = splitCsvLine(lines[i]);
+        if (!cols.length) continue;
+        const name = (cols[nameIdx] || "").trim();
+        const year = yearIdx !== -1 ? (cols[yearIdx] || "").trim() : "";
+        const rating = parseFloat(cols[ratingIdx] || "0");
         if (name && !isNaN(rating) && rating > 0) {
           entries.push({ title: name, year, lbRating: rating });
         }
@@ -1573,7 +1599,7 @@
         const endpoints = {
           popular: `${base}/${type}/popular?api_key=${TMDB_API_KEY}&language=en-US`,
           acclaimed: `${base}/${type}/top_rated?api_key=${TMDB_API_KEY}&language=en-US`,
-          newReleases: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&${isTV ? "first_air_date.gte" : "primary_release_date.gte"}=2023-01-01`,
+          newReleases: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&${isTV ? "first_air_date.gte" : "primary_release_date.gte"}=${NEW_RELEASE_YEAR}-01-01`,
           genre1: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=${gIds[genre1] || 18}`,
           genre2: `${base}/discover/${type}?api_key=${TMDB_API_KEY}&language=en-US&sort_by=popularity.desc&with_genres=${gIds[genre2] || 16}`,
           genre3: isTV
@@ -1779,7 +1805,7 @@
         if (acclaimedMerged.length > 0) cats.push({ title: "\ud83c\udfc6 Critically Acclaimed", catKey: "acclaimed", movies: acclaimedMerged });
 
         // New Releases
-        cats.push({ title: "New Releases", catKey: "newReleases", movies: mergeResults(db.filter(m => parseInt(m.year) >= 2023), getTmdbMovies("newReleases")) });
+        cats.push({ title: "New Releases", catKey: "newReleases", movies: mergeResults(db.filter(m => parseInt(m.year) >= NEW_RELEASE_YEAR), getTmdbMovies("newReleases")) });
 
         // Genre rows
         cats.push({ title: genre1, catKey: "g1", movies: mergeResults(db.filter(m => m.genre === genre1), getTmdbMovies("g1")) });
@@ -3523,6 +3549,7 @@
       const [statsOpen, setStatsOpen] = useState(false);
       const saveTimerRef = useRef(null);
       const syncedRef = useRef(false);
+      const toastTimerRef = useRef(null);
 
       const isTV = mode === "tv";
       const activeList = isTV ? tvRankedList : rankedList;
@@ -3745,7 +3772,8 @@
 
       function showToast(msg) {
         setToast(msg);
-        setTimeout(() => setToast(""), 2500);
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => setToast(""), 2500);
       }
 
       async function handleSignIn() {
@@ -3973,9 +4001,11 @@
       }
 
       function handleCantDecide() {
+        if (!activeSession) return;
         var preferNew = Math.random() < 0.5;
+        var pickedTitle = preferNew ? activeSession.newMovie.title : activeSession.compareMovie.title;
         handleChoice(preferNew);
-        showToast("Coin flip! \uD83C\uDFB2");
+        showToast("Coin flip! \uD83C\uDFB2 Picked \"" + pickedTitle + "\"");
       }
 
       function handleChoice(preferNew) {
