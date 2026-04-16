@@ -1944,7 +1944,7 @@
     }
 
     // ─── Search Bar ─────────────────────────────────────────────
-    function SearchBar({ onSelect, onBookmark, onRerank, rankedIds, watchlistIds, localDb, searchFn, placeholder, customLabel }) {
+    function SearchBar({ onSelect, onBookmark, onRerank, rankedIds, watchlistIds, localDb, searchFn, placeholder, customLabel, dupeLabel }) {
       const [query, setQuery] = useState("");
       const [open, setOpen] = useState(false);
       const [tmdbResults, setTmdbResults] = useState([]);
@@ -2027,7 +2027,7 @@
                       <div className="search-item-year">{m.year} &middot; {m.genre}</div>
                     </div>
                     {isDupe && onRerank && <span className="search-item-dupe" style={{color:"var(--accent)", cursor:"pointer"}}>Re-rank ↻</span>}
-                    {isDupe && !onRerank && <span className="search-item-dupe">Already ranked</span>}
+                    {isDupe && !onRerank && <span className="search-item-dupe">{dupeLabel || "Already ranked"}</span>}
                     {onBookmark && !isDupe && (
                       <button className={`bookmark-btn ${watchlistIds && watchlistIds.has(m.id) ? "bookmarked" : ""}`}
                         disabled={watchlistIds && watchlistIds.has(m.id)}
@@ -2331,7 +2331,7 @@
               const score = getScore(i, total);
               var itemClass = "ranked-item";
               if (dragIndex === displayIdx) itemClass += " dragging-source";
-              if (overIndex === displayIdx && overIndex !== dragIndex) itemClass += " drop-before";
+              if (overIndex === displayIdx && overIndex !== dragIndex && overIndex !== dragIndex + 1) itemClass += " drop-before";
               return (
                 <div key={movie.id} className={itemClass}>
                   <div className="ranked-item-tap" onClick={() => onMovieClick && onMovieClick(movie)}>
@@ -3082,22 +3082,25 @@
         }
       }
 
-      function handleAdminMove(fromIdx, toIdx) {
-        if (profileTab === "movies") {
-          setEditedMovies(prev => {
-            const next = [...prev];
-            const [item] = next.splice(fromIdx, 1);
-            next.splice(toIdx, 0, item);
+      function handleAdminMove(draggedId, beforeId) {
+        const setter = profileTab === "movies" ? setEditedMovies : setEditedTv;
+        setter(prev => {
+          const next = prev.slice();
+          const fromIdx = next.findIndex(m => m.id === draggedId);
+          if (fromIdx === -1) return prev;
+          const [item] = next.splice(fromIdx, 1);
+          if (beforeId === null) {
+            next.push(item);
             return next;
-          });
-        } else {
-          setEditedTv(prev => {
-            const next = [...prev];
-            const [item] = next.splice(fromIdx, 1);
-            next.splice(toIdx, 0, item);
+          }
+          const toIdx = next.findIndex(m => m.id === beforeId);
+          if (toIdx === -1) {
+            next.push(item);
             return next;
-          });
-        }
+          }
+          next.splice(toIdx, 0, item);
+          return next;
+        });
       }
 
       async function handleAdminSave() {
@@ -4231,7 +4234,8 @@
                 localDb={isTV ? TV_DB : MOVIE_DB}
                 searchFn={isTV ? searchTMDBTV : searchTMDB}
                 placeholder={isTV ? "Search for a TV show to add to watchlist..." : "Search for a movie to add to watchlist..."}
-                customLabel={isTV ? "TV show" : "movie"} />
+                customLabel={isTV ? "TV show" : "movie"}
+                dupeLabel="Already on watchlist" />
               {activeWatchlist.length === 0 ? (
                 <div className="watchlist-empty">
                   <p>&#x1F4D6;</p>
