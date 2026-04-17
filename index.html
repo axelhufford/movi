@@ -40,13 +40,24 @@
       --border: rgba(255,255,255,0.08);
       --border-strong: rgba(255,255,255,0.14);
       --border-accent: rgba(255,77,77,0.35);
+      --accent-grad: linear-gradient(135deg, #FF4D4D 0%, #FF7A3D 100%);
+      --accent-grad-hover: linear-gradient(135deg, #FF5C5C 0%, #FF8A4E 100%);
+      --gold-foil: linear-gradient(110deg, #f5c518 0%, #fff1a8 45%, #f5c518 55%, #c99a00 100%);
+      --hero-glow: radial-gradient(55% 40% at 50% 0%, rgba(255,77,77,0.18), transparent 70%);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+      --shadow-md: 0 4px 16px -4px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-lg: 0 18px 48px -12px rgba(0,0,0,0.6), 0 2px 4px rgba(0,0,0,0.3);
+      --shadow-glow: 0 0 0 1px var(--border-accent), 0 18px 48px -16px rgba(255,77,77,0.45);
     }
 
     body {
       font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
+      background-color: var(--bg);
+      background-image: radial-gradient(55% 40% at 50% 0%, rgba(255,77,77,0.18), transparent 70%);
+      background-attachment: fixed;
       color: var(--text);
       min-height: 100vh;
+      line-height: 1.5;
     }
 
     #root { max-width: 900px; margin: 0 auto; padding: 20px; }
@@ -821,19 +832,38 @@
 
     /* Day Mode (Light Theme) */
     .day-mode {
-      --bg: #FAF8F5;
-      --surface: #FEFDFB;
-      --surface2: #F3F0EC;
+      --bg: #FBF7F0;
+      --surface: #FFFCF6;
+      --surface2: #F3ECE0;
       --text: #1A1817;
       --text-muted: #6B6862;
       --text-dim: #6B6862;
       --text-faint: #A8A49C;
-      --border: rgba(0,0,0,0.08);
-      --border-strong: rgba(0,0,0,0.14);
+      --border: rgba(60,30,10,0.10);
+      --border-strong: rgba(60,30,10,0.18);
       --border-accent: rgba(255,77,77,0.30);
       --accent-soft: rgba(255,77,77,0.10);
       --accent-text: #E63838;
       --accent-hover: #E63838;
+      --hero-glow: radial-gradient(55% 40% at 50% 0%, rgba(255,122,61,0.14), transparent 70%);
+      --shadow-sm: 0 1px 2px rgba(120,60,30,0.06);
+      --shadow-md: 0 6px 20px -6px rgba(120,60,30,0.14), 0 1px 2px rgba(120,60,30,0.06);
+      --shadow-lg: 0 20px 48px -16px rgba(120,60,30,0.22), 0 2px 6px rgba(120,60,30,0.08);
+      --shadow-glow: 0 0 0 1px var(--border-accent), 0 20px 48px -18px rgba(255,77,77,0.35);
+    }
+    body:has(.day-mode) {
+      background-color: transparent;
+      background-image:
+        radial-gradient(55% 40% at 50% 0%, rgba(255,122,61,0.14), transparent 70%),
+        linear-gradient(180deg, #FBF7F0 0%, #F3E8D6 100%);
+    }
+    body:has(.tv-mode) {
+      background-image: radial-gradient(55% 40% at 50% 0%, rgba(0,135,90,0.18), transparent 70%);
+    }
+    body:has(.day-mode.tv-mode) {
+      background-image:
+        radial-gradient(55% 40% at 50% 0%, rgba(0,135,90,0.12), transparent 70%),
+        linear-gradient(180deg, #F5FAF7 0%, #D8EADE 100%);
     }
     .day-mode .logo-frame {
       border-color: rgba(0,0,0,0.13);
@@ -906,6 +936,10 @@
       --surface2: #1E2722;
       --border: rgba(255,255,255,0.08);
       --border-strong: rgba(255,255,255,0.14);
+      --accent-grad: linear-gradient(135deg, #00875A 0%, #2DAF7C 100%);
+      --accent-grad-hover: linear-gradient(135deg, #2DAF7C 0%, #3FC48F 100%);
+      --hero-glow: radial-gradient(55% 40% at 50% 0%, rgba(0,135,90,0.18), transparent 70%);
+      --shadow-glow: 0 0 0 1px var(--border-accent), 0 18px 48px -16px rgba(0,135,90,0.45);
     }
     .day-mode.tv-mode {
       --accent: #00875A;
@@ -922,6 +956,10 @@
       --text-faint: #A8A49C;
       --border: rgba(0,0,0,0.08);
       --border-strong: rgba(0,0,0,0.14);
+      --accent-grad: linear-gradient(135deg, #006B47 0%, #00875A 100%);
+      --accent-grad-hover: linear-gradient(135deg, #00875A 0%, #2DAF7C 100%);
+      --hero-glow: radial-gradient(55% 40% at 50% 0%, rgba(0,135,90,0.12), transparent 70%);
+      --shadow-glow: 0 0 0 1px var(--border-accent), 0 20px 48px -18px rgba(0,135,90,0.35);
     }
     .tv-mode .mode-btn.active {
       background: var(--accent-soft);
@@ -1060,6 +1098,343 @@
     .stats-empty {
       text-align: center; padding: 30px; color: var(--text-muted);
       font-size: 0.9rem;
+    }
+
+    /* ─── v2 visual refresh ──────────────────────────────────────── */
+
+    /* Module 1 — overlays: backdrop-blur + softer dim */
+    .comparison-overlay, .import-overlay, .movie-detail-overlay, .expanded-cat-overlay {
+      background: rgba(8,6,4,0.68);
+      backdrop-filter: blur(14px) saturate(1.1);
+      -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    }
+    .day-mode .comparison-overlay,
+    .day-mode .import-overlay,
+    .day-mode .movie-detail-overlay,
+    .day-mode .expanded-cat-overlay {
+      background: rgba(30,20,10,0.38);
+    }
+
+    /* Module 1 — elevation on cards/modals/panels */
+    .comparison-box, .movie-detail-box, .import-modal, .expanded-cat-modal,
+    .auth-form, .profile-banner,
+    .community-card, .trophy-card, .ranked-item, .watchlist-item,
+    .nav-tabs, .stats-accordion, .signin-prompt {
+      box-shadow: var(--shadow-md);
+    }
+    .comparison-box, .movie-detail-box, .import-modal, .expanded-cat-modal {
+      box-shadow: var(--shadow-lg);
+    }
+    .community-card:hover, .trophy-card:hover, .ranked-item:hover, .watchlist-item:hover {
+      box-shadow: var(--shadow-glow);
+    }
+
+    /* Module 2 — gradient primary CTAs */
+    .auth-btn-signin,
+    .auth-form-submit,
+    .import-btn-primary,
+    .movie-detail-rerank,
+    .profile-back,
+    .profile-add-btn {
+      background: var(--accent-grad);
+      box-shadow: 0 6px 18px -8px rgba(255,77,77,0.55), inset 0 1px 0 rgba(255,255,255,0.15);
+      transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+    }
+    .tv-mode .auth-btn-signin,
+    .tv-mode .auth-form-submit,
+    .tv-mode .import-btn-primary,
+    .tv-mode .movie-detail-rerank,
+    .tv-mode .profile-back,
+    .tv-mode .profile-add-btn {
+      box-shadow: 0 6px 18px -8px rgba(0,135,90,0.55), inset 0 1px 0 rgba(255,255,255,0.15);
+    }
+    .auth-btn-signin:hover,
+    .auth-form-submit:hover,
+    .import-btn-primary:hover,
+    .movie-detail-rerank:hover,
+    .profile-back:hover,
+    .profile-add-btn:not(:disabled):hover {
+      background: var(--accent-grad-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px -8px rgba(255,77,77,0.6), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    .tv-mode .auth-btn-signin:hover,
+    .tv-mode .auth-form-submit:hover,
+    .tv-mode .import-btn-primary:hover,
+    .tv-mode .movie-detail-rerank:hover,
+    .tv-mode .profile-back:hover,
+    .tv-mode .profile-add-btn:not(:disabled):hover {
+      box-shadow: 0 10px 24px -8px rgba(0,135,90,0.6), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    .auth-btn-signin:active,
+    .auth-form-submit:active,
+    .import-btn-primary:active,
+    .movie-detail-rerank:active,
+    .profile-back:active,
+    .profile-add-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 3px 8px -4px rgba(255,77,77,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .profile-add-btn:disabled {
+      background: var(--surface2); color: var(--text-muted);
+      box-shadow: none;
+    }
+
+    /* Module 2 — nav tab + mode btn active gradients */
+    .nav-tab.active {
+      background: var(--accent-grad);
+      box-shadow: 0 4px 14px -6px rgba(255,77,77,0.55);
+    }
+    .tv-mode .nav-tab.active {
+      box-shadow: 0 4px 14px -6px rgba(0,135,90,0.55);
+    }
+    .mode-btn.active {
+      background: var(--accent-soft);
+      box-shadow: inset 0 0 0 1px var(--border-accent);
+    }
+
+    /* Module 2 — score badge: branded ramp (gold → warm amber → muted red) */
+    .score-high { background: rgba(245,197,24,0.18); color: var(--gold); }
+    .score-mid  { background: rgba(255,122,61,0.18); color: #FFA26B; }
+    .score-low  { background: rgba(255,77,77,0.18);  color: var(--accent-text); }
+    .day-mode .score-high { background: rgba(245,197,24,0.22); color: #a07d00; }
+    .day-mode .score-mid  { background: rgba(255,122,61,0.18); color: #c95a1f; }
+    .day-mode .score-low  { background: rgba(255,77,77,0.14);  color: #c13535; }
+    .tv-mode .score-high { background: rgba(0,135,90,0.22); color: #3FC48F; }
+    .tv-mode .score-mid  { background: rgba(245,197,24,0.18); color: var(--gold); }
+    .tv-mode .score-low  { background: rgba(150,150,150,0.14); color: var(--text-muted); }
+    .score-badge {
+      font-variant-numeric: tabular-nums;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+    }
+
+    /* Module 3 — ranked list hero treatment */
+    .ranked-item { position: relative; }
+    .rank-number {
+      font-variant-numeric: tabular-nums;
+      font-size: 1.9rem; font-weight: 900;
+      -webkit-text-stroke: 1px var(--border-strong);
+      color: transparent;
+      letter-spacing: -0.03em;
+      min-width: 42px;
+    }
+    .ranked-item:nth-child(1) .rank-number,
+    .ranked-item:nth-child(2) .rank-number,
+    .ranked-item:nth-child(3) .rank-number {
+      -webkit-text-stroke: 0;
+    }
+    .ranked-item:nth-child(1) .rank-number { color: var(--accent); }
+    .tv-mode .ranked-item:nth-child(1) .rank-number { color: var(--accent); }
+    .ranked-list > .ranked-item:first-child::before {
+      content: ""; position: absolute; top: 0; left: 14px; right: 14px;
+      height: 1px;
+      background-image: linear-gradient(to right, var(--border-strong) 50%, transparent 50%);
+      background-size: 8px 1px; background-repeat: repeat-x;
+      pointer-events: none; opacity: 0.6;
+    }
+    .ranked-item::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+      height: 2px; background: var(--accent-grad); border-radius: 0 0 var(--radius) var(--radius);
+      transform: scaleX(var(--score-scale, 0)); transform-origin: left;
+      transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), opacity 0.2s;
+      opacity: 0;
+    }
+    .ranked-item:hover::after { opacity: 1; }
+    .ranked-list.is-dragging .ranked-item::after { display: none; }
+
+    /* Module 4 — comparison screen polish */
+    .comparison-cards { position: relative; }
+    .comparison-cards::before,
+    .comparison-cards::after {
+      content: ""; position: absolute; width: 60%; aspect-ratio: 1;
+      border-radius: 50%; filter: blur(40px); pointer-events: none;
+      opacity: 0.55; z-index: -1;
+      background: radial-gradient(circle, rgba(255,77,77,0.35) 0%, transparent 70%);
+      animation: compare-pulse 4s ease-in-out infinite;
+    }
+    .comparison-cards::before { top: -10%; left: -10%; }
+    .comparison-cards::after  { bottom: -10%; right: -10%; animation-delay: 2s; }
+    .tv-mode .comparison-cards::before,
+    .tv-mode .comparison-cards::after {
+      background: radial-gradient(circle, rgba(0,135,90,0.35) 0%, transparent 70%);
+    }
+    .day-mode .comparison-cards::before,
+    .day-mode .comparison-cards::after { opacity: 0.3; }
+    @keyframes compare-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.45; }
+      50%      { transform: scale(1.08); opacity: 0.7; }
+    }
+    .comparison-card {
+      border-radius: 18px; transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s ease, border-color 0.2s;
+    }
+    .comparison-card:hover {
+      transform: scale(1.04) translateY(-2px);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent), 0 22px 56px -18px rgba(255,77,77,0.55);
+    }
+    .tv-mode .comparison-card:hover {
+      box-shadow: 0 0 0 2px var(--accent), 0 22px 56px -18px rgba(0,135,90,0.55);
+    }
+    .comparison-card.is-losing {
+      animation: loser-fade 220ms cubic-bezier(0.4,0,0.2,1) forwards;
+    }
+    .comparison-card.is-winning {
+      animation: winner-flash 220ms cubic-bezier(0.4,0,0.2,1) forwards;
+    }
+    @keyframes loser-fade {
+      to { transform: scale(0.92); opacity: 0.25; }
+    }
+    @keyframes winner-flash {
+      0%   { transform: scale(1); box-shadow: 0 0 0 2px var(--accent), 0 22px 56px -18px rgba(255,77,77,0.55); }
+      50%  { transform: scale(1.06); box-shadow: 0 0 0 3px var(--accent), 0 30px 64px -14px rgba(255,77,77,0.7); }
+      100% { transform: scale(1); box-shadow: 0 0 0 2px var(--accent), 0 22px 56px -18px rgba(255,77,77,0.55); }
+    }
+    .comparison-label { background: var(--accent-grad); box-shadow: 0 4px 14px -6px rgba(255,77,77,0.55); }
+    .tv-mode .comparison-label { box-shadow: 0 4px 14px -6px rgba(0,135,90,0.55); }
+
+    /* Module 4 — film-strip progress */
+    .comparison-strip {
+      display: flex; gap: 4px; justify-content: center;
+      margin: 4px 0 2px; padding: 6px 0;
+      flex-wrap: wrap; max-width: 360px; margin-left: auto; margin-right: auto;
+    }
+    .comparison-strip-cell {
+      width: 14px; height: 18px; border-radius: 2px;
+      background: var(--surface2);
+      border: 1px solid var(--border-strong);
+      position: relative;
+      transition: background 0.3s ease, transform 0.3s ease;
+    }
+    .comparison-strip-cell::before,
+    .comparison-strip-cell::after {
+      content: ""; position: absolute; left: 50%; transform: translateX(-50%);
+      width: 6px; height: 2px; border-radius: 1px;
+      background: rgba(0,0,0,0.35);
+    }
+    .comparison-strip-cell::before { top: 2px; }
+    .comparison-strip-cell::after  { bottom: 2px; }
+    .day-mode .comparison-strip-cell::before,
+    .day-mode .comparison-strip-cell::after { background: rgba(0,0,0,0.18); }
+    .comparison-strip-cell.filled {
+      background: var(--accent-grad);
+      border-color: transparent;
+    }
+    .comparison-strip-cell.current {
+      transform: scaleY(1.18);
+      box-shadow: 0 0 0 1px var(--border-accent), 0 0 10px -2px var(--accent);
+    }
+    .comparison-strip-text {
+      font-size: 0.72rem; color: var(--text-faint);
+      margin: 0 0 18px;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Module 5 — typography rhythm */
+    .ranked-header h2 {
+      font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em;
+    }
+    .rank-number, .score-badge, .ranked-item-year, .profile-count,
+    .compatibility-badge, .activity-time, .stats-card-number,
+    .stats-bar-count, .comparison-progress {
+      font-variant-numeric: tabular-nums;
+    }
+    .eyebrow {
+      display: block;
+      font-family: 'Outfit', sans-serif; font-weight: 600;
+      font-size: 0.68rem; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--text-faint); margin-bottom: 4px;
+    }
+    .trophy-section-title .eyebrow { margin-bottom: 2px; }
+
+    /* Module 6 — micro-interactions */
+    @keyframes bookmark-pop {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.35); }
+      70%  { transform: scale(0.95); }
+      100% { transform: scale(1.1); }
+    }
+    .bookmark-btn.bookmarked {
+      animation: bookmark-pop 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .genre-pill {
+      transition: background 0.25s ease, color 0.25s ease, transform 0.12s ease, box-shadow 0.2s ease;
+    }
+    .genre-pill.active {
+      background: var(--accent-grad);
+      box-shadow: 0 4px 12px -4px rgba(255,77,77,0.5);
+    }
+    .tv-mode .genre-pill.active {
+      box-shadow: 0 4px 12px -4px rgba(0,135,90,0.5);
+    }
+    .genre-pill:not(.active):hover { background: var(--surface2); color: var(--text); }
+    .genre-pill:active { transform: scale(0.96); }
+
+    /* Poster skeleton shimmer — subtle ambient motion for placeholder posters */
+    .poster-placeholder {
+      position: relative; overflow: hidden;
+    }
+    .poster-placeholder::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.06) 50%, transparent 70%);
+      animation: poster-shimmer 2.6s linear infinite;
+      pointer-events: none;
+    }
+    .day-mode .poster-placeholder::after {
+      background: linear-gradient(110deg, transparent 30%, rgba(0,0,0,0.04) 50%, transparent 70%);
+    }
+    @keyframes poster-shimmer {
+      from { transform: translateX(-100%); }
+      to   { transform: translateX(100%); }
+    }
+
+    /* Search input: richer focus ring */
+    .search-input:focus {
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    /* Module 8 — stats bars gradient + reveal */
+    .stats-bar-fill {
+      background: var(--accent-grad);
+      animation: bar-reveal 600ms cubic-bezier(0.22,1,0.36,1) both;
+    }
+    .tv-mode .stats-bar-fill { background: var(--accent-grad); }
+    @keyframes bar-reveal {
+      from { transform: scaleX(0); transform-origin: left; }
+      to   { transform: scaleX(1); transform-origin: left; }
+    }
+    .stats-card-number {
+      background: var(--accent-grad);
+      -webkit-background-clip: text; background-clip: text;
+      color: transparent;
+    }
+
+    /* Module 8 — gold-foil first trophy winner */
+    .trophy-shelf .trophy-card:first-child .trophy-winner-name {
+      background: var(--gold-foil);
+      background-size: 200% 100%;
+      -webkit-background-clip: text; background-clip: text;
+      color: transparent;
+      font-weight: 700;
+      animation: foil-shimmer 5s linear infinite;
+    }
+    @keyframes foil-shimmer {
+      from { background-position: 0% 50%; }
+      to   { background-position: 200% 50%; }
+    }
+
+    /* Respect reduced-motion: disable decorative animations */
+    @media (prefers-reduced-motion: reduce) {
+      .comparison-cards::before, .comparison-cards::after,
+      .trophy-shelf .trophy-card:first-child .trophy-winner-name,
+      .poster-placeholder::after,
+      .bookmark-btn.bookmarked,
+      .stats-bar-fill {
+        animation: none !important;
+      }
+      .comparison-card.is-losing, .comparison-card.is-winning {
+        animation-duration: 1ms !important;
+      }
     }
   </style>
 </head>
@@ -2058,14 +2433,25 @@
 
     // ─── Comparison View ────────────────────────────────────────
     function ComparisonView({ session, onChoice, onCancel, onWatchlist, onSkip, itemLabel }) {
+      const [picked, setPicked] = useState(null);
+      useEffect(() => { setPicked(null); }, [session && session.step, session && session.newMovie && session.newMovie.id]);
       if (!session || session.done) return null;
       const { newMovie, compareMovie, step, maxSteps } = session;
 
       var compareScore = getScore(session.mid, session.list.length);
 
-      function Card({ movie, onClick, score }) {
+      function handleChoice(isNew) {
+        if (picked) return;
+        setPicked(isNew ? "new" : "compare");
+        setTimeout(() => onChoice(isNew), 200);
+      }
+
+      function Card({ movie, onClick, score, pickedState }) {
+        var klass = "comparison-card";
+        if (pickedState === "winner") klass += " is-winning";
+        else if (pickedState === "loser") klass += " is-losing";
         return (
-          <div className="comparison-card" onClick={onClick}>
+          <div className={klass} onClick={onClick}>
             <Poster poster={movie.poster} title={movie.title} size="lg" />
             <div className="comparison-card-info">
               <div className="comparison-card-title">{movie.title}</div>
@@ -2083,14 +2469,31 @@
         );
       }
 
+      const totalCells = Math.max(maxSteps, 1);
+      const currentCell = Math.min(step, totalCells - 1);
+      const stripCells = [];
+      for (var sc = 0; sc < totalCells; sc++) {
+        var cellClass = "comparison-strip-cell";
+        if (sc < step) cellClass += " filled";
+        if (sc === currentCell) cellClass += " current";
+        stripCells.push(<span key={sc} className={cellClass} />);
+      }
+
       return (
         <div className="comparison-overlay">
           <div className="comparison-box">
             <div className="comparison-title">Which {itemLabel || "movie"} do you prefer?</div>
-            <div className="comparison-progress">Comparison {step + 1} of ~{Math.max(maxSteps, 1)}</div>
+            <div className="comparison-strip" role="progressbar"
+              aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={totalCells}
+              aria-label={`Comparison ${step + 1} of ~${totalCells}`}>
+              {stripCells}
+            </div>
+            <div className="comparison-strip-text">Comparison {step + 1} / ~{totalCells}</div>
             <div className="comparison-cards">
-              <Card movie={newMovie} onClick={() => onChoice(true)} />
-              <Card movie={compareMovie} onClick={() => onChoice(false)} score={compareScore} />
+              <Card movie={newMovie} onClick={() => handleChoice(true)}
+                pickedState={picked === "new" ? "winner" : picked === "compare" ? "loser" : null} />
+              <Card movie={compareMovie} onClick={() => handleChoice(false)} score={compareScore}
+                pickedState={picked === "compare" ? "winner" : picked === "new" ? "loser" : null} />
             </div>
             <div style={{display:"flex",gap:"8px",justifyContent:"center",marginTop:"16px",flexWrap:"wrap"}}>
               {onWatchlist && (
@@ -2337,7 +2740,7 @@
               if (dragIndex === displayIdx) itemClass += " dragging-source";
               if (overIndex === displayIdx && overIndex !== dragIndex && overIndex !== dragIndex + 1) itemClass += " drop-before";
               return (
-                <div key={movie.id} className={itemClass}>
+                <div key={movie.id} className={itemClass} style={{"--score-scale": Math.max(0.04, Math.min(1, score / 10))}}>
                   <div className="ranked-item-tap" onClick={() => onMovieClick && onMovieClick(movie)}>
                     <div className="rank-number">{i + 1}</div>
                     <Poster poster={movie.poster} title={movie.title}
