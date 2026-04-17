@@ -911,7 +911,7 @@
     .day-mode .watchlist-item .ranked-item-title { color: var(--text); }
     .day-mode .rec-card-title { color: var(--text); }
     .day-mode .search-item-title { color: var(--text); }
-    .day-mode .rank-number { color: rgba(0,0,0,0.16); }
+    .day-mode .rank-number { color: var(--text-muted); }
 
     /* Theme toggle button */
     .theme-toggle {
@@ -966,7 +966,6 @@
     }
     .tv-mode .search-item:hover { background: var(--accent-soft); }
     .tv-mode .search-add-custom:hover { background: var(--accent-soft); }
-    .tv-mode .score-high { background: rgba(0, 135, 90, 0.25); color: #4caf50; }
     .tv-mode .ranked-item:nth-child(1) .rank-number { color: var(--accent); }
 
     /* Profile sub-toggle for movies/tv */
@@ -1193,16 +1192,13 @@
       box-shadow: inset 0 0 0 1px var(--border-accent);
     }
 
-    /* Module 2 — score badge: branded ramp (gold → warm amber → muted red) */
-    .score-high { background: rgba(245,197,24,0.18); color: var(--gold); }
-    .score-mid  { background: rgba(255,122,61,0.18); color: #FFA26B; }
-    .score-low  { background: rgba(255,77,77,0.18);  color: var(--accent-text); }
-    .day-mode .score-high { background: rgba(245,197,24,0.22); color: #a07d00; }
-    .day-mode .score-mid  { background: rgba(255,122,61,0.18); color: #c95a1f; }
-    .day-mode .score-low  { background: rgba(255,77,77,0.14);  color: #c13535; }
-    .tv-mode .score-high { background: rgba(0,135,90,0.22); color: #3FC48F; }
-    .tv-mode .score-mid  { background: rgba(245,197,24,0.18); color: var(--gold); }
-    .tv-mode .score-low  { background: rgba(150,150,150,0.14); color: var(--text-muted); }
+    /* Module 2 — score badge: universal green → yellow → gray scale */
+    .score-high { background: rgba(76,175,80,0.20);  color: #4fb96a; }
+    .score-mid  { background: rgba(245,197,24,0.18); color: var(--gold); }
+    .score-low  { background: rgba(150,150,150,0.14); color: var(--text-muted); }
+    .day-mode .score-high { background: rgba(76,175,80,0.20); color: #2f7d3a; }
+    .day-mode .score-mid  { background: rgba(245,197,24,0.22); color: #a07d00; }
+    .day-mode .score-low  { background: rgba(150,150,150,0.18); color: #6b6b6b; }
     .score-badge {
       font-variant-numeric: tabular-nums;
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
@@ -1213,15 +1209,9 @@
     .rank-number {
       font-variant-numeric: tabular-nums;
       font-size: 1.9rem; font-weight: 900;
-      -webkit-text-stroke: 1px var(--border-strong);
-      color: transparent;
+      color: var(--text-muted);
       letter-spacing: -0.03em;
       min-width: 42px;
-    }
-    .ranked-item:nth-child(1) .rank-number,
-    .ranked-item:nth-child(2) .rank-number,
-    .ranked-item:nth-child(3) .rank-number {
-      -webkit-text-stroke: 0;
     }
     .ranked-item:nth-child(1) .rank-number { color: var(--accent); }
     .tv-mode .ranked-item:nth-child(1) .rank-number { color: var(--accent); }
