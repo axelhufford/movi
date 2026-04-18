@@ -305,6 +305,33 @@
       opacity: 0.4; transition: opacity 0.2s; padding: 4px 8px; flex-shrink: 0;
     }
     .community-delete-btn:hover { opacity: 1; }
+    .community-you-block { margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px dashed var(--surface2); }
+    .community-section-label {
+      font-family: 'Outfit', sans-serif; font-size: 0.75rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .community-card-you {
+      border: 1px solid var(--accent);
+      box-shadow: 0 0 0 1px var(--accent-soft, rgba(245, 197, 24, 0.15));
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+    }
+    .community-you-tag {
+      font-size: 0.6rem; font-weight: 800; letter-spacing: 1px;
+      padding: 2px 6px; border-radius: 6px; background: var(--accent); color: #fff;
+      margin-left: 6px; vertical-align: middle; text-transform: uppercase;
+    }
+    .community-card-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .personal-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.7rem; font-weight: 600;
+      padding: 3px 8px; border-radius: 10px;
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border); margin-top: 4px;
+      max-width: 100%; overflow: hidden;
+    }
+    .personal-badge-emoji { font-size: 0.85rem; line-height: 1; }
+    .personal-badge-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* Search */
     .search-section { position: relative; margin-bottom: 24px; }
@@ -3248,6 +3275,150 @@
       "Taste Twins": "The two users with the highest compatibility score"
     };
 
+    // ─── Personal Badge (one unique trophy per user, shown on their card) ─────────
+    function computePersonalBadge(p) {
+      var movies = (p && p.movies) || [];
+      var tv = (p && p.tvShows) || [];
+      var total = movies.length + tv.length;
+
+      if (total === 0) {
+        return { emoji: "\uD83C\uDF31", label: "Fresh Face", tooltip: "Just joined \u2014 rankings coming soon!" };
+      }
+
+      // Exclusive-medium checks
+      if (movies.length === 0 && tv.length >= 3) {
+        return { emoji: "\uD83D\uDCFA", label: "Small Screen Only", tooltip: tv.length + " shows, no movies \u2014 a pure TV fan" };
+      }
+      if (tv.length === 0 && movies.length >= 3) {
+        return { emoji: "\uD83C\uDFAC", label: "Big Screen Only", tooltip: movies.length + " movies, no TV \u2014 cinema purist" };
+      }
+
+      // Dominant genre (min 5 movies, >=40% single genre)
+      if (movies.length >= 5) {
+        var genreCount = {};
+        movies.forEach(function(m) { if (m.genre) genreCount[m.genre] = (genreCount[m.genre] || 0) + 1; });
+        var topGenre = null; var topGenreN = 0;
+        Object.keys(genreCount).forEach(function(g) {
+          if (genreCount[g] > topGenreN) { topGenre = g; topGenreN = genreCount[g]; }
+        });
+        var gPct = movies.length ? (topGenreN / movies.length) : 0;
+        if (topGenre && gPct >= 0.4) {
+          var genreBadges = {
+            "Horror": { emoji: "\uD83D\uDD2A", label: "Horror Soul" },
+            "Comedy": { emoji: "\uD83D\uDE02", label: "Laugh Track" },
+            "Action": { emoji: "\uD83D\uDCA5", label: "Action Junkie" },
+            "Sci-Fi": { emoji: "\uD83E\uDDEA", label: "Sci-Fi Devotee" },
+            "Romance": { emoji: "\uD83D\uDC98", label: "Hopeless Romantic" },
+            "Drama": { emoji: "\uD83C\uDFAD", label: "Drama Seeker" },
+            "Animation": { emoji: "\uD83C\uDFA8", label: "Animation Fan" },
+            "Thriller": { emoji: "\uD83D\uDE31", label: "Thrill Seeker" },
+            "Documentary": { emoji: "\uD83C\uDFA5", label: "Doc Enthusiast" },
+            "Fantasy": { emoji: "\uD83E\uDDD9", label: "Fantasy Dreamer" },
+            "Mystery": { emoji: "\uD83D\uDD75\uFE0F", label: "Sleuth" },
+            "Crime": { emoji: "\uD83D\uDD2B", label: "Crime Buff" },
+            "Family": { emoji: "\uD83D\uDC6A", label: "Family Viewer" },
+            "Adventure": { emoji: "\uD83D\uDDFA\uFE0F", label: "Adventurer" },
+            "War": { emoji: "\u2694\uFE0F", label: "War Film Fan" },
+            "Western": { emoji: "\uD83E\uDD20", label: "Wild West Fan" },
+            "Music": { emoji: "\uD83C\uDFB5", label: "Music Lover" },
+            "History": { emoji: "\uD83D\uDCDC", label: "History Buff" }
+          };
+          var gb = genreBadges[topGenre] || { emoji: "\uD83C\uDF9E\uFE0F", label: topGenre + " Fan" };
+          return {
+            emoji: gb.emoji, label: gb.label,
+            tooltip: Math.round(gPct * 100) + "% of their ranked movies are " + topGenre
+          };
+        }
+      }
+
+      // Dominant decade (min 5 movies, >=35% single decade)
+      if (movies.length >= 5) {
+        var decCount = {};
+        movies.forEach(function(m) {
+          var y = parseInt(m.year);
+          if (y > 1900) {
+            var d = Math.floor(y / 10) * 10;
+            decCount[d] = (decCount[d] || 0) + 1;
+          }
+        });
+        var topDec = null; var topDecN = 0;
+        Object.keys(decCount).forEach(function(d) {
+          if (decCount[d] > topDecN) { topDec = parseInt(d); topDecN = decCount[d]; }
+        });
+        if (topDec && movies.length && (topDecN / movies.length) >= 0.35) {
+          var decPct = Math.round(topDecN / movies.length * 100);
+          var decLabel, decEmoji;
+          if (topDec <= 1960) { decLabel = "Classic Cinephile"; decEmoji = "\uD83C\uDFA9"; }
+          else if (topDec === 1970) { decLabel = "70s Rebel"; decEmoji = "\u270C\uFE0F"; }
+          else if (topDec === 1980) { decLabel = "80s Kid"; decEmoji = "\uD83D\uDCFC"; }
+          else if (topDec === 1990) { decLabel = "90s Kid"; decEmoji = "\uD83D\uDCC0"; }
+          else if (topDec === 2000) { decLabel = "2000s Fan"; decEmoji = "\uD83D\uDCBF"; }
+          else if (topDec === 2010) { decLabel = "2010s Binger"; decEmoji = "\uD83D\uDCF1"; }
+          else if (topDec >= 2020) { decLabel = "Now Watcher"; decEmoji = "\u2728"; }
+          else { decLabel = (topDec % 100) + "s Fan"; decEmoji = "\uD83D\uDCC5"; }
+          return { emoji: decEmoji, label: decLabel, tooltip: decPct + "% of their movies are from the " + topDec + "s" };
+        }
+      }
+
+      // Genre variety (min 8 movies, >=6 distinct genres)
+      if (movies.length >= 8) {
+        var gs = {};
+        movies.forEach(function(m) { if (m.genre) gs[m.genre] = true; });
+        var gCount = Object.keys(gs).length;
+        if (gCount >= 6) {
+          return { emoji: "\uD83C\uDF0D", label: "Eclectic Viewer", tooltip: "Ranks across " + gCount + " different genres" };
+        }
+      }
+
+      // Year range span (min 8 movies, >=40 year span)
+      if (movies.length >= 8) {
+        var ys = movies.map(function(m) { return parseInt(m.year); }).filter(function(y) { return y > 1900; });
+        if (ys.length >= 5) {
+          var span = Math.max.apply(null, ys) - Math.min.apply(null, ys);
+          if (span >= 40) {
+            return { emoji: "\u23F3", label: "Time Traveler", tooltip: "Ranks span " + span + " years" };
+          }
+        }
+      }
+
+      // High rated taste (min 8 movies, top 10 avg rating >= 8.0)
+      if (movies.length >= 8) {
+        var top10 = movies.slice(0, 10).filter(function(m) { return m.rating; });
+        if (top10.length >= 5) {
+          var avg = top10.reduce(function(s, m) { return s + m.rating; }, 0) / top10.length;
+          if (avg >= 8.0) {
+            return { emoji: "\uD83C\uDFC5", label: "High Standards", tooltip: "Top 10 avg " + avg.toFixed(1) + " on TMDB" };
+          }
+          if (avg <= 6.8) {
+            return { emoji: "\uD83D\uDC8E", label: "Underdog Lover", tooltip: "Top 10 avg " + avg.toFixed(1) + " \u2014 loves the underrated" };
+          }
+        }
+      }
+
+      // Balanced movies + TV
+      if (movies.length >= 5 && tv.length >= 5) {
+        return { emoji: "\u2694\uFE0F", label: "Dual Threat", tooltip: movies.length + " movies and " + tv.length + " shows ranked" };
+      }
+
+      // Volume
+      if (total >= 50) {
+        return { emoji: "\uD83D\uDCDA", label: "Rank Veteran", tooltip: total + " titles ranked" };
+      }
+      if (total >= 20) {
+        return { emoji: "\uD83D\uDCDD", label: "Rising Ranker", tooltip: total + " titles ranked" };
+      }
+
+      // Fallback: use their #1 pick
+      var top1 = movies[0] || tv[0];
+      if (top1) {
+        var title = top1.title || "";
+        var short = title.length > 22 ? title.slice(0, 22) + "\u2026" : title;
+        return { emoji: "\uD83E\uDD47", label: "#1: " + short, tooltip: "Top pick: " + title };
+      }
+
+      return { emoji: "\uD83C\uDFAB", label: "Getting Started", tooltip: "Just starting out" };
+    }
+
     function TrophyShelf({ trophies, onViewProfile }) {
       if (!trophies || trophies.length === 0) return null;
       const [selected, setSelected] = useState(null);
@@ -3299,8 +3470,9 @@
       );
     }
 
-    function CommunityView({ onViewProfile, currentUid, isAdmin, myMovies, myTv }) {
+    function CommunityView({ onViewProfile, currentUid, currentDisplayName, currentPhotoURL, isAdmin, myMovies, myTv }) {
       const [profiles, setProfiles] = useState([]);
+      const [me, setMe] = useState(null);
       const [trophies, setTrophies] = useState([]);
       const [loading, setLoading] = useState(true);
       const [showExplainer, setShowExplainer] = useState(false);
@@ -3309,6 +3481,21 @@
         loadCommunityProfiles().then(p => {
           // Compute trophies using ALL profiles (including current user)
           setTrophies(computeTrophies(p));
+
+          // Split out current user
+          let mine = currentUid ? p.find(pr => pr.uid === currentUid) : null;
+          if (!mine && currentUid && ((myMovies && myMovies.length > 0) || (myTv && myTv.length > 0))) {
+            mine = {
+              uid: currentUid,
+              displayName: currentDisplayName || "You",
+              photoURL: currentPhotoURL || null,
+              movies: myMovies || [],
+              tvShows: myTv || [],
+              movieCount: (myMovies || []).length,
+              tvShowCount: (myTv || []).length
+            };
+          }
+          setMe(mine || null);
 
           let filtered = p.filter(pr => pr.uid !== currentUid);
           // Compute compatibility scores and sort
@@ -3328,7 +3515,71 @@
           setProfiles(filtered);
           setLoading(false);
         });
-      }, [currentUid, myMovies, myTv]);
+      }, [currentUid, currentDisplayName, currentPhotoURL, myMovies, myTv]);
+
+      function renderCard(p, opts) {
+        opts = opts || {};
+        const isYou = !!opts.isYou;
+        const badge = computePersonalBadge(p);
+        return (
+          <div key={p.uid} className={"community-card" + (isYou ? " community-card-you" : "")} onClick={() => onViewProfile(p.uid)}>
+            {p.photoURL
+              ? <img src={p.photoURL} alt="" className="community-card-avatar" referrerPolicy="no-referrer" />
+              : <div className="community-card-avatar-ph">{(p.displayName || "?")[0]}</div>
+            }
+            <div className="community-card-info">
+              <div className="community-card-name-row">
+                <span className="community-card-name">{p.displayName || "Anonymous"}{isAdmin && p.isPrivate ? " \uD83D\uDD12" : ""}</span>
+                {isYou && <span className="community-you-tag">You</span>}
+              </div>
+              <div className="community-card-meta">
+                {(p.movieCount || 0) > 0 && `${p.movieCount} movies`}
+                {(p.movieCount || 0) > 0 && (p.tvShowCount || 0) > 0 && " \u00B7 "}
+                {(p.tvShowCount || 0) > 0 && `${p.tvShowCount} shows`}
+                {(p.movieCount || 0) === 0 && (p.tvShowCount || 0) === 0 && "No rankings yet"}
+                {" ranked"}
+              </div>
+              {badge && (
+                <div className="personal-badge" title={badge.tooltip}>
+                  <span className="personal-badge-emoji">{badge.emoji}</span>
+                  <span className="personal-badge-label">{badge.label}</span>
+                </div>
+              )}
+              {p.movies && p.movies.length > 0 && (
+                <div className="community-card-top">
+                  {p.movies.slice(0, 5).map(m => (
+                    <Poster key={m.id} poster={m.poster} title={m.title}
+                      style={{ width: 28, height: 42, borderRadius: 4 }} />
+                  ))}
+                </div>
+              )}
+            </div>
+            {!isYou && p.compatibility !== undefined && p.compatibility !== null && (
+              <div className={`compatibility-badge ${p.compatibility >= 70 ? "compatibility-high" : p.compatibility >= 40 ? "compatibility-mid" : "compatibility-low"}`}
+                onClick={(e) => { e.stopPropagation(); setShowExplainer(prev => !prev); }}>
+                {p.compatibility}%
+              </div>
+            )}
+            {!isYou && p.compatibility === null && (myMovies && myMovies.length > 0 || myTv && myTv.length > 0) && (
+              <div className="compatibility-badge compatibility-low"
+                onClick={(e) => { e.stopPropagation(); setShowExplainer(prev => !prev); }}>—</div>
+            )}
+            <div className="community-card-arrow">&#x203A;</div>
+            {!isYou && isAdmin && (
+              <button className="community-delete-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`Delete ${p.displayName || "this user"}'s profile?`)) {
+                    deleteProfile(p.uid).then(() => {
+                      setProfiles(prev => prev.filter(pr => pr.uid !== p.uid));
+                    });
+                  }
+                }}
+                title="Delete profile">&#x1F5D1;</button>
+            )}
+          </div>
+        );
+      }
 
       if (!FIREBASE_READY) {
         return (
@@ -3351,7 +3602,7 @@
         );
       }
 
-      if (profiles.length === 0) {
+      if (profiles.length === 0 && !me) {
         return (
           <div className="community-section">
             <div className="community-empty">
@@ -3372,57 +3623,20 @@
           )}
           <TrophyShelf trophies={trophies} onViewProfile={onViewProfile} />
           <ActivityFeed />
-          <div className="community-list">
-            {profiles.map(p => (
-              <div key={p.uid} className="community-card" onClick={() => onViewProfile(p.uid)}>
-                {p.photoURL
-                  ? <img src={p.photoURL} alt="" className="community-card-avatar" referrerPolicy="no-referrer" />
-                  : <div className="community-card-avatar-ph">{(p.displayName || "?")[0]}</div>
-                }
-                <div className="community-card-info">
-                  <div className="community-card-name">{p.displayName || "Anonymous"}{isAdmin && p.isPrivate ? " \uD83D\uDD12" : ""}</div>
-                  <div className="community-card-meta">
-                    {(p.movieCount || 0) > 0 && `${p.movieCount} movies`}
-                    {(p.movieCount || 0) > 0 && (p.tvShowCount || 0) > 0 && " · "}
-                    {(p.tvShowCount || 0) > 0 && `${p.tvShowCount} shows`}
-                    {(p.movieCount || 0) === 0 && (p.tvShowCount || 0) === 0 && "No rankings yet"}
-                    {" ranked"}
-                  </div>
-                  {p.movies && p.movies.length > 0 && (
-                    <div className="community-card-top">
-                      {p.movies.slice(0, 5).map(m => (
-                        <Poster key={m.id} poster={m.poster} title={m.title}
-                          style={{ width: 28, height: 42, borderRadius: 4 }} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {p.compatibility !== undefined && p.compatibility !== null && (
-                  <div className={`compatibility-badge ${p.compatibility >= 70 ? "compatibility-high" : p.compatibility >= 40 ? "compatibility-mid" : "compatibility-low"}`}
-                    onClick={(e) => { e.stopPropagation(); setShowExplainer(prev => !prev); }}>
-                    {p.compatibility}%
-                  </div>
-                )}
-                {p.compatibility === null && (myMovies && myMovies.length > 0 || myTv && myTv.length > 0) && (
-                  <div className="compatibility-badge compatibility-low"
-                    onClick={(e) => { e.stopPropagation(); setShowExplainer(prev => !prev); }}>—</div>
-                )}
-                <div className="community-card-arrow">&#x203A;</div>
-                {isAdmin && (
-                  <button className="community-delete-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(`Delete ${p.displayName || "this user"}'s profile?`)) {
-                        deleteProfile(p.uid).then(() => {
-                          setProfiles(prev => prev.filter(pr => pr.uid !== p.uid));
-                        });
-                      }
-                    }}
-                    title="Delete profile">&#x1F5D1;</button>
-                )}
+          {me && (
+            <div className="community-you-block">
+              <div className="community-section-label">Your Profile</div>
+              {renderCard(me, { isYou: true })}
+            </div>
+          )}
+          {profiles.length > 0 && (
+            <>
+              {me && <div className="community-section-label">Community</div>}
+              <div className="community-list">
+                {profiles.map(p => renderCard(p))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       );
     }
@@ -4667,6 +4881,8 @@
 
           {tab === "community" && (
             <CommunityView onViewProfile={handleViewProfile} currentUid={user ? user.uid : null}
+              currentDisplayName={user ? user.displayName : null}
+              currentPhotoURL={user ? user.photoURL : null}
               isAdmin={user && user.uid === ADMIN_UID}
               myMovies={rankedList} myTv={tvRankedList} />
           )}
