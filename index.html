@@ -3275,148 +3275,386 @@
       "Taste Twins": "The two users with the highest compatibility score"
     };
 
-    // ─── Personal Badge (one unique trophy per user, shown on their card) ─────────
-    function computePersonalBadge(p) {
-      var movies = (p && p.movies) || [];
-      var tv = (p && p.tvShows) || [];
-      var total = movies.length + tv.length;
+    // ─── Personal Badges: community-wide unique assignment ────────────────────
+    function computePersonalBadges(allProfiles) {
+      if (!allProfiles || allProfiles.length === 0) return new Map();
 
-      if (total === 0) {
-        return { emoji: "\uD83C\uDF31", label: "Fresh Face", tooltip: "Just joined \u2014 rankings coming soon!" };
+      // ── helpers ──────────────────────────────────────────────────────────────
+      function pctMovieGenre(movies, genre) {
+        if (!movies || movies.length < 5) return 0;
+        return movies.filter(function(m) { return m.genre === genre; }).length / movies.length;
+      }
+      function pctTvGenre(tv, genre) {
+        if (!tv || tv.length < 5) return 0;
+        return tv.filter(function(m) { return m.genre === genre; }).length / tv.length;
+      }
+      function pctDecade(movies, min, max) {
+        if (!movies || movies.length < 5) return 0;
+        return movies.filter(function(m) { var y = parseInt(m.year); return y >= min && y <= max; }).length / movies.length;
+      }
+      function top10Avg(movies) {
+        var rated = (movies || []).slice(0, 10).filter(function(m) { return m.rating; });
+        if (rated.length < 5) return null;
+        return rated.reduce(function(s, m) { return s + m.rating; }, 0) / rated.length;
+      }
+      function distinctGenreCount(movies) {
+        var g = {};
+        (movies || []).forEach(function(m) { if (m.genre) g[m.genre] = true; });
+        return Object.keys(g).length;
+      }
+      function movieYears(movies) {
+        return (movies || []).map(function(m) { return parseInt(m.year); }).filter(function(y) { return y > 1900; });
+      }
+      function avgTitleLen(movies) {
+        var items = (movies || []).slice(0, 10);
+        if (items.length < 3) return null;
+        return items.reduce(function(s, m) { return s + (m.title || "").length; }, 0) / items.length;
       }
 
-      // Exclusive-medium checks
-      if (movies.length === 0 && tv.length >= 3) {
-        return { emoji: "\uD83D\uDCFA", label: "Small Screen Only", tooltip: tv.length + " shows, no movies \u2014 a pure TV fan" };
-      }
-      if (tv.length === 0 && movies.length >= 3) {
-        return { emoji: "\uD83C\uDFAC", label: "Big Screen Only", tooltip: movies.length + " movies, no TV \u2014 cinema purist" };
+      // ── candidate list builder ────────────────────────────────────────────────
+      var allCands = []; // {uid, label, emoji, strength, tooltip}
+      function push(uid, label, emoji, strength, tooltip) {
+        allCands.push({ uid: uid, label: label, emoji: emoji, strength: strength, tooltip: tooltip });
       }
 
-      // Dominant genre (min 5 movies, >=40% single genre)
-      if (movies.length >= 5) {
-        var genreCount = {};
-        movies.forEach(function(m) { if (m.genre) genreCount[m.genre] = (genreCount[m.genre] || 0) + 1; });
-        var topGenre = null; var topGenreN = 0;
-        Object.keys(genreCount).forEach(function(g) {
-          if (genreCount[g] > topGenreN) { topGenre = g; topGenreN = genreCount[g]; }
+      var MOVIE_GENRES = [
+        { g: "Horror",      e: "\uD83D\uDD2A", l: "Horror Soul" },
+        { g: "Comedy",      e: "\uD83D\uDE02", l: "Laugh Track" },
+        { g: "Action",      e: "\uD83D\uDCA5", l: "Action Junkie" },
+        { g: "Sci-Fi",      e: "\uD83E\uDDEA", l: "Sci-Fi Devotee" },
+        { g: "Romance",     e: "\uD83D\uDC98", l: "Hopeless Romantic" },
+        { g: "Drama",       e: "\uD83C\uDFAD", l: "Drama Seeker" },
+        { g: "Animation",   e: "\uD83C\uDFA8", l: "Animation Fan" },
+        { g: "Thriller",    e: "\uD83D\uDE31", l: "Thrill Seeker" },
+        { g: "Documentary", e: "\uD83C\uDFA5", l: "Doc Enthusiast" },
+        { g: "Fantasy",     e: "\uD83E\uDDD9", l: "Fantasy Dreamer" },
+        { g: "Mystery",     e: "\uD83D\uDD75\uFE0F", l: "Sleuth" },
+        { g: "Crime",       e: "\uD83D\uDD2B", l: "Crime Buff" },
+        { g: "Family",      e: "\uD83D\uDC6A", l: "Family Viewer" },
+        { g: "Adventure",   e: "\uD83D\uDDFA\uFE0F", l: "Adventurer" },
+        { g: "War",         e: "\u2694\uFE0F", l: "War Film Fan" },
+        { g: "Western",     e: "\uD83E\uDD20", l: "Wild West Fan" },
+        { g: "Music",       e: "\uD83C\uDFB5", l: "Music Lover" },
+        { g: "History",     e: "\uD83D\uDCDC", l: "History Buff" }
+      ];
+      var TV_GENRES = [
+        { g: "Comedy",      e: "\uD83D\uDCFA", l: "Sitcom Scholar" },
+        { g: "Crime",       e: "\uD83D\uDEA8", l: "Procedural Pro" },
+        { g: "Drama",       e: "\uD83C\uDFC6", l: "Prestige Binger" },
+        { g: "Animation",   e: "\uD83D\uDD78\uFE0F", l: "Anime Acolyte" },
+        { g: "Reality",     e: "\uD83D\uDE48", l: "Reality Rider" },
+        { g: "Documentary", e: "\uD83D\uDCC4", l: "Docu-Series Devotee" },
+        { g: "Sci-Fi",      e: "\uD83D\uDE80", l: "Sci-Fi Showrunner" },
+        { g: "Thriller",    e: "\uD83D\uDE28", l: "Edge-of-Seat Fan" },
+        { g: "Fantasy",     e: "\uD83C\uDF09", l: "Fantasy Realm" },
+        { g: "Action",      e: "\uD83D\uDCA8", l: "TV Action Fan" },
+        { g: "Horror",      e: "\uD83D\uDC7B", l: "Scary TV Fan" },
+        { g: "Romance",     e: "\uD83D\uDC9E", l: "TV Romantic" }
+      ];
+      var DECADE_DEFS = [
+        { min: 1900, max: 1969, l: "Classic Cinephile", e: "\uD83C\uDFA9", era: "pre-1970" },
+        { min: 1970, max: 1979, l: "70s Rebel",         e: "\u270C\uFE0F",  era: "the 1970s" },
+        { min: 1980, max: 1989, l: "80s Kid",           e: "\uD83D\uDCFC", era: "the 1980s" },
+        { min: 1990, max: 1999, l: "90s Kid",           e: "\uD83D\uDCC0", era: "the 1990s" },
+        { min: 2000, max: 2009, l: "2000s Fan",         e: "\uD83D\uDCBF", era: "the 2000s" },
+        { min: 2010, max: 2019, l: "2010s Binger",      e: "\uD83D\uDCF1", era: "the 2010s" },
+        { min: 2020, max: 2099, l: "Now Watcher",       e: "\u2728",       era: "2020 onwards" }
+      ];
+
+      // ── per-user candidates ─────────────────────────────────────────────────
+      allProfiles.forEach(function(p) {
+        var mv = p.movies || [];
+        var tv = p.tvShows || [];
+        var uid = p.uid;
+        var total = mv.length + tv.length;
+
+        // A: Genre — movies
+        MOVIE_GENRES.forEach(function(g) {
+          var pct = pctMovieGenre(mv, g.g);
+          if (pct >= 0.30) push(uid, g.l, g.e, pct, Math.round(pct * 100) + "% of their ranked movies are " + g.g);
         });
-        var gPct = movies.length ? (topGenreN / movies.length) : 0;
-        if (topGenre && gPct >= 0.4) {
-          var genreBadges = {
-            "Horror": { emoji: "\uD83D\uDD2A", label: "Horror Soul" },
-            "Comedy": { emoji: "\uD83D\uDE02", label: "Laugh Track" },
-            "Action": { emoji: "\uD83D\uDCA5", label: "Action Junkie" },
-            "Sci-Fi": { emoji: "\uD83E\uDDEA", label: "Sci-Fi Devotee" },
-            "Romance": { emoji: "\uD83D\uDC98", label: "Hopeless Romantic" },
-            "Drama": { emoji: "\uD83C\uDFAD", label: "Drama Seeker" },
-            "Animation": { emoji: "\uD83C\uDFA8", label: "Animation Fan" },
-            "Thriller": { emoji: "\uD83D\uDE31", label: "Thrill Seeker" },
-            "Documentary": { emoji: "\uD83C\uDFA5", label: "Doc Enthusiast" },
-            "Fantasy": { emoji: "\uD83E\uDDD9", label: "Fantasy Dreamer" },
-            "Mystery": { emoji: "\uD83D\uDD75\uFE0F", label: "Sleuth" },
-            "Crime": { emoji: "\uD83D\uDD2B", label: "Crime Buff" },
-            "Family": { emoji: "\uD83D\uDC6A", label: "Family Viewer" },
-            "Adventure": { emoji: "\uD83D\uDDFA\uFE0F", label: "Adventurer" },
-            "War": { emoji: "\u2694\uFE0F", label: "War Film Fan" },
-            "Western": { emoji: "\uD83E\uDD20", label: "Wild West Fan" },
-            "Music": { emoji: "\uD83C\uDFB5", label: "Music Lover" },
-            "History": { emoji: "\uD83D\uDCDC", label: "History Buff" }
-          };
-          var gb = genreBadges[topGenre] || { emoji: "\uD83C\uDF9E\uFE0F", label: topGenre + " Fan" };
-          return {
-            emoji: gb.emoji, label: gb.label,
-            tooltip: Math.round(gPct * 100) + "% of their ranked movies are " + topGenre
-          };
+
+        // B: Genre — TV
+        TV_GENRES.forEach(function(g) {
+          var pct = pctTvGenre(tv, g.g);
+          if (pct >= 0.30) push(uid, g.l, g.e, pct, Math.round(pct * 100) + "% of their ranked shows are " + g.g);
+        });
+
+        // C: Decade — movies
+        DECADE_DEFS.forEach(function(d) {
+          var pct = pctDecade(mv, d.min, d.max);
+          if (pct >= 0.30) push(uid, d.l, d.e, pct, Math.round(pct * 100) + "% of their movies are from " + d.era);
+        });
+
+        // D: Rating signals
+        var avg = top10Avg(mv);
+        if (avg !== null) {
+          push(uid, "Tastemaker",        "\uD83C\uDFC5", avg,        "Top 10 avg " + avg.toFixed(1) + " on TMDB \u2014 high-calibre picks");
+          push(uid, "Hidden Gem Hunter", "\uD83D\uDD0D", 10 - avg,   "Top 10 avg " + avg.toFixed(1) + " on TMDB \u2014 loves the underrated");
+          var top5rated = mv.slice(0, 5).filter(function(m) { return m.rating; });
+          if (top5rated.length >= 3) {
+            var minR = Math.min.apply(null, top5rated.map(function(m) { return m.rating; }));
+            push(uid, "All Killer", "\uD83D\uDCBB", minR, "Even their #5 is rated " + minR.toFixed(1) + " on TMDB");
+          }
+          if (mv.length >= 8) {
+            var top10rated = mv.slice(0, 10).filter(function(m) { return m.rating; });
+            if (top10rated.length >= 5) {
+              var maxR = Math.max.apply(null, top10rated.map(function(m) { return m.rating; }));
+              var minRt = Math.min.apply(null, top10rated.map(function(m) { return m.rating; }));
+              push(uid, "Risk Taker", "\uD83C\uDFB2", maxR - minRt, "Top 10 ratings span " + (maxR - minRt).toFixed(1) + " points");
+            }
+          }
+        }
+
+        // E: Year extremes (cross-user part handled below; span + decade count here)
+        var yrs = movieYears(mv);
+        if (yrs.length >= 5) {
+          var span = Math.max.apply(null, yrs) - Math.min.apply(null, yrs);
+          if (span >= 30) push(uid, "Time Traveler", "\u23F3", span, "Rankings span " + span + " years");
+          var dcs = {};
+          yrs.forEach(function(y) { dcs[Math.floor(y / 10) * 10] = true; });
+          var dcCount = Object.keys(dcs).length;
+          if (dcCount >= 5) push(uid, "Century Scholar", "\uD83D\uDDBC\uFE0F", dcCount, "Movies from " + dcCount + " different decades");
+        }
+
+        // F: Variety / Specialist
+        if (mv.length >= 8) {
+          var dg = distinctGenreCount(mv);
+          if (dg >= 6) push(uid, "Genre Omnivore", "\uD83C\uDF0D", dg, "Ranks across " + dg + " different movie genres");
+        }
+        if (mv.length >= 10) {
+          var dg2 = distinctGenreCount(mv);
+          if (dg2 <= 2) push(uid, "Specialist", "\uD83D\uDD2C", 10 - dg2, "Sticks to " + dg2 + " genre" + (dg2 === 1 ? "" : "s") + " \u2014 knows exactly what they like");
+        }
+
+        // G: Top-5 patterns
+        if (mv.length >= 5) {
+          var t5 = mv.slice(0, 5);
+          var t5g = t5.map(function(m) { return m.genre; }).filter(Boolean);
+          var t5d = t5.map(function(m) { return Math.floor(parseInt(m.year) / 10) * 10; }).filter(function(d) { return d > 190; });
+          var t5l = t5.map(function(m) { return ((m.title || "")[0] || "").toUpperCase(); }).filter(Boolean);
+          var uniqueG = Array.from ? Array.from(new Set(t5g)) : t5g.filter(function(v, i, a) { return a.indexOf(v) === i; });
+          var uniqueD = Array.from ? Array.from(new Set(t5d)) : t5d.filter(function(v, i, a) { return a.indexOf(v) === i; });
+          var uniqueL = Array.from ? Array.from(new Set(t5l)) : t5l.filter(function(v, i, a) { return a.indexOf(v) === i; });
+          if (t5g.length >= 4 && uniqueG.length === 1)  push(uid, "True to Genre",   "\uD83D\uDCA1", 1, "Top 5 movies are all " + t5g[0]);
+          if (t5d.length >= 4 && uniqueD.length === 1)  push(uid, "Decade Loyalist",  "\uD83D\uDCC6", 1, "Top 5 movies all from the " + t5d[0] + "s");
+          if (t5g.length >= 5 && uniqueG.length >= 5)   push(uid, "Wild Card",        "\uD83C\uDCCF", 1, "Top 5 movies span 5 completely different genres");
+          if (t5l.length >= 5 && uniqueL.length === 1)  push(uid, "Letter Locked",    "\uD83D\uDCDD", 1, "Top 5 all start with \"" + t5l[0] + "\"");
+          if (t5l.length >= 5 && uniqueL.length >= 5)   push(uid, "Alphabet Soup",    "\uD83D\uDD24", 1, "Top 5 start with 5 different letters");
+        }
+        if (mv.length >= 5) {
+          var atl = avgTitleLen(mv);
+          if (atl !== null) {
+            push(uid, "Long Titles",  "\uD83D\uDCD6", atl,     "Average title in their top 10 is " + Math.round(atl) + " characters");
+            push(uid, "Short & Sweet","\u26A1",       -atl,    "Average title in their top 10 is " + Math.round(atl) + " characters");
+          }
+        }
+
+        // H: Volume bands (add all qualifying — greedy picks highest available)
+        if (total >= 100) push(uid, "Century Club",  "\uD83D\uDCDA", total, total + " titles ranked \u2014 absolute legend");
+        if (total >= 50)  push(uid, "Half Century",  "\uD83D\uDCCA", total, total + " titles ranked");
+        if (total >= 25)  push(uid, "Quarter Club",  "\uD83C\uDF96\uFE0F", total, total + " titles ranked");
+        if (total >= 10)  push(uid, "Starter Pack",  "\uD83D\uDD16", total, total + " titles ranked");
+        if (total >= 5)   push(uid, "Rising Ranker", "\uD83D\uDCDD", total, total + " titles ranked");
+        if (total === 0)  push(uid, "Fresh Face",    "\uD83C\uDF31", 0,    "Just joined \u2014 rankings coming soon!");
+
+        // I: Medium ratio
+        if (mv.length >= 10 && tv.length === 0) push(uid, "Pure Cinephile", "\uD83C\uDFAC", mv.length, mv.length + " movies, no TV \u2014 cinema purist");
+        if (tv.length >= 10 && mv.length === 0) push(uid, "TV Evangelist",  "\uD83D\uDCFA", tv.length, tv.length + " shows, no movies");
+        if (mv.length >= 5 && tv.length >= 5)   push(uid, "Dual Threat",    "\u2694\uFE0F", Math.min(mv.length, tv.length), mv.length + " movies + " + tv.length + " shows");
+        if (total >= 15 && tv.length > 0 && mv.length / tv.length >= 3) push(uid, "Film First", "\uD83D\uDD35", mv.length / tv.length, "Movies \u2013 shows ratio: " + mv.length + ":" + tv.length);
+        if (total >= 15 && mv.length > 0 && tv.length / mv.length >= 3) push(uid, "TV First",   "\uD83D\uDFE3", tv.length / mv.length, "Shows \u2013 movies ratio: " + tv.length + ":" + mv.length);
+
+        // J: Watchlist
+        var wc = p.watchlistCount || 0;
+        var twc = p.tvWatchlistCount || 0;
+        if (wc > 0)  push(uid, "Watchlist Hoarder", "\uD83D\uDCCB", wc,  wc + " movies saved to the watchlist");
+        if (twc > 0) push(uid, "Queue Master",      "\uD83D\uDCBC", twc, twc + " shows in the TV queue");
+        if (total >= 5) {
+          var compR = total / (total + wc + twc + 1);
+          push(uid, "Completionist", "\uD83C\uDFC1", compR, "More time ranking than collecting \u2014 gets it done");
+        }
+      });
+
+      // ── cross-user: year extremes ─────────────────────────────────────────────
+      var globalMinYr = Infinity; var globalMaxYr = -Infinity;
+      allProfiles.forEach(function(p) {
+        var yrs = movieYears(p.movies || []);
+        if (!yrs.length) return;
+        var mn = Math.min.apply(null, yrs); var mx = Math.max.apply(null, yrs);
+        if (mn < globalMinYr) globalMinYr = mn;
+        if (mx > globalMaxYr) globalMaxYr = mx;
+      });
+      allProfiles.forEach(function(p) {
+        var yrs = movieYears(p.movies || []);
+        if (yrs.length < 3) return;
+        var mn = Math.min.apply(null, yrs); var mx = Math.max.apply(null, yrs);
+        if (mn === globalMinYr && globalMinYr < Infinity)
+          push(p.uid, "The Archaeologist", "\uD83D\uDFBA", 10000 - mn, "Has the oldest ranked film in the community (" + mn + ")");
+        if (mx === globalMaxYr && globalMaxYr > -Infinity)
+          push(p.uid, "The Futurist", "\uD83D\uDEF8", mx, "Has the newest ranked film in the community (" + mx + ")");
+      });
+
+      // ── cross-user: social / comparative ─────────────────────────────────────
+      var compat = {};
+      allProfiles.forEach(function(p) { compat[p.uid] = { total: 0, count: 0 }; });
+      for (var i = 0; i < allProfiles.length; i++) {
+        for (var j = i + 1; j < allProfiles.length; j++) {
+          var a = allProfiles[i]; var b = allProfiles[j];
+          var sc = computeCompatibility(a.movies || [], a.tvShows || [], b.movies || [], b.tvShows || []);
+          if (sc !== null) {
+            compat[a.uid].total += sc; compat[a.uid].count++;
+            compat[b.uid].total += sc; compat[b.uid].count++;
+          }
         }
       }
+      allProfiles.forEach(function(p) {
+        var cs = compat[p.uid];
+        if (!cs || cs.count < 1) return;
+        var avg = cs.total / cs.count;
+        push(p.uid, "Crowd Pleaser", "\uD83D\uDC11", avg,       Math.round(avg) + "% avg compatibility \u2014 taste everyone shares");
+        push(p.uid, "Lone Wolf",     "\uD83D\uDC3A", 100 - avg, Math.round(avg) + "% avg compatibility \u2014 totally unique taste");
+      });
 
-      // Dominant decade (min 5 movies, >=35% single decade)
-      if (movies.length >= 5) {
-        var decCount = {};
-        movies.forEach(function(m) {
-          var y = parseInt(m.year);
-          if (y > 1900) {
-            var d = Math.floor(y / 10) * 10;
-            decCount[d] = (decCount[d] || 0) + 1;
+      // Hottest Take: #1 movie ranked lowest by others
+      allProfiles.forEach(function(p) {
+        if (!p.movies || p.movies.length < 5) return;
+        var id1 = p.movies[0].id; var ranks = [];
+        allProfiles.forEach(function(o) {
+          if (o.uid === p.uid || !o.movies) return;
+          for (var k = 0; k < o.movies.length; k++) {
+            if (o.movies[k].id === id1) { ranks.push(k / Math.max(o.movies.length - 1, 1)); break; }
           }
         });
-        var topDec = null; var topDecN = 0;
-        Object.keys(decCount).forEach(function(d) {
-          if (decCount[d] > topDecN) { topDec = parseInt(d); topDecN = decCount[d]; }
+        if (ranks.length >= 1) {
+          var avgR = ranks.reduce(function(s, v) { return s + v; }, 0) / ranks.length;
+          push(p.uid, "Hottest Take", "\uD83C\uDF36\uFE0F", avgR, "#1 pick (\"" + p.movies[0].title + "\") is ranked much lower by others");
+        }
+      });
+
+      // The Contrarian: biggest rank gap vs community on any movie
+      allProfiles.forEach(function(p) {
+        if (!p.movies || p.movies.length < 10) return;
+        var bestGap = 0; var bestMov = null;
+        p.movies.forEach(function(m, mi) {
+          var myNorm = mi / Math.max(p.movies.length - 1, 1); var others = [];
+          allProfiles.forEach(function(o) {
+            if (o.uid === p.uid || !o.movies || o.movies.length < 5) return;
+            for (var k = 0; k < o.movies.length; k++) {
+              if (o.movies[k].id === m.id) { others.push(k / Math.max(o.movies.length - 1, 1)); break; }
+            }
+          });
+          if (others.length >= 1) {
+            var gap = Math.abs(myNorm - others.reduce(function(s, v) { return s + v; }, 0) / others.length);
+            if (gap > bestGap) { bestGap = gap; bestMov = m; }
+          }
         });
-        if (topDec && movies.length && (topDecN / movies.length) >= 0.35) {
-          var decPct = Math.round(topDecN / movies.length * 100);
-          var decLabel, decEmoji;
-          if (topDec <= 1960) { decLabel = "Classic Cinephile"; decEmoji = "\uD83C\uDFA9"; }
-          else if (topDec === 1970) { decLabel = "70s Rebel"; decEmoji = "\u270C\uFE0F"; }
-          else if (topDec === 1980) { decLabel = "80s Kid"; decEmoji = "\uD83D\uDCFC"; }
-          else if (topDec === 1990) { decLabel = "90s Kid"; decEmoji = "\uD83D\uDCC0"; }
-          else if (topDec === 2000) { decLabel = "2000s Fan"; decEmoji = "\uD83D\uDCBF"; }
-          else if (topDec === 2010) { decLabel = "2010s Binger"; decEmoji = "\uD83D\uDCF1"; }
-          else if (topDec >= 2020) { decLabel = "Now Watcher"; decEmoji = "\u2728"; }
-          else { decLabel = (topDec % 100) + "s Fan"; decEmoji = "\uD83D\uDCC5"; }
-          return { emoji: decEmoji, label: decLabel, tooltip: decPct + "% of their movies are from the " + topDec + "s" };
-        }
-      }
+        if (bestMov) push(p.uid, "The Contrarian", "\uD83D\uDCCF", bestGap, "Ranks \"" + bestMov.title + "\" very differently from everyone else");
+      });
 
-      // Genre variety (min 8 movies, >=6 distinct genres)
-      if (movies.length >= 8) {
-        var gs = {};
-        movies.forEach(function(m) { if (m.genre) gs[m.genre] = true; });
-        var gCount = Object.keys(gs).length;
-        if (gCount >= 6) {
-          return { emoji: "\uD83C\uDF0D", label: "Eclectic Viewer", tooltip: "Ranks across " + gCount + " different genres" };
-        }
-      }
+      // #1 Defender: #1 movie appears in no other user's top 5
+      allProfiles.forEach(function(p) {
+        if (!p.movies || p.movies.length < 3) return;
+        var id1 = p.movies[0].id;
+        var shared = allProfiles.some(function(o) {
+          return o.uid !== p.uid && (o.movies || []).slice(0, 5).some(function(m) { return m.id === id1; });
+        });
+        if (!shared) push(p.uid, "#1 Defender", "\uD83D\uDEE1\uFE0F", 1, "\"" + p.movies[0].title + "\" is theirs alone at #1");
+      });
 
-      // Year range span (min 8 movies, >=40 year span)
-      if (movies.length >= 8) {
-        var ys = movies.map(function(m) { return parseInt(m.year); }).filter(function(y) { return y > 1900; });
-        if (ys.length >= 5) {
-          var span = Math.max.apply(null, ys) - Math.min.apply(null, ys);
-          if (span >= 40) {
-            return { emoji: "\u23F3", label: "Time Traveler", tooltip: "Ranks span " + span + " years" };
+      // Consensus Pick: #1 movie most widely shared in others' top 10
+      allProfiles.forEach(function(p) {
+        if (!p.movies || p.movies.length < 3) return;
+        var id1 = p.movies[0].id;
+        var cnt = allProfiles.filter(function(o) {
+          return o.uid !== p.uid && (o.movies || []).slice(0, 10).some(function(m) { return m.id === id1; });
+        }).length;
+        if (cnt >= 1) push(p.uid, "Consensus Pick", "\uD83E\uDD1D", cnt, "\"" + p.movies[0].title + "\" is loved by " + cnt + " other" + (cnt === 1 ? "" : "s") + " in the community");
+      });
+
+      // ── greedy unique assignment ──────────────────────────────────────────────
+      var LABEL_ORDER = [
+        // Genre — movies (most distinctive personality)
+        "Horror Soul","Laugh Track","Action Junkie","Sci-Fi Devotee","Hopeless Romantic","Drama Seeker",
+        "Animation Fan","Thrill Seeker","Doc Enthusiast","Fantasy Dreamer","Sleuth","Crime Buff",
+        "Family Viewer","Adventurer","War Film Fan","Wild West Fan","Music Lover","History Buff",
+        // Genre — TV
+        "Sitcom Scholar","Procedural Pro","Prestige Binger","Anime Acolyte","Reality Rider",
+        "Docu-Series Devotee","Sci-Fi Showrunner","Edge-of-Seat Fan","Fantasy Realm",
+        "TV Action Fan","Scary TV Fan","TV Romantic",
+        // Social / comparative
+        "Hottest Take","#1 Defender","The Contrarian","Consensus Pick","Crowd Pleaser","Lone Wolf",
+        // Year extremes
+        "The Archaeologist","The Futurist","Time Traveler","Century Scholar",
+        // Top-5 patterns
+        "True to Genre","Decade Loyalist","Wild Card","Letter Locked","Alphabet Soup",
+        "Long Titles","Short & Sweet",
+        // Rating signals
+        "Tastemaker","Hidden Gem Hunter","All Killer","Risk Taker",
+        // Variety / specialist
+        "Genre Omnivore","Specialist",
+        // Decade — movies
+        "Classic Cinephile","70s Rebel","80s Kid","90s Kid","2000s Fan","2010s Binger","Now Watcher",
+        // Medium ratio
+        "Pure Cinephile","TV Evangelist","Dual Threat","Film First","TV First",
+        // Watchlist
+        "Watchlist Hoarder","Queue Master","Completionist",
+        // Volume (from most to least)
+        "Century Club","Half Century","Quarter Club","Starter Pack","Rising Ranker",
+        // Catch-all
+        "Fresh Face"
+      ];
+
+      // group and sort by strength
+      var byLabel = {};
+      allCands.forEach(function(c) {
+        if (!byLabel[c.label]) byLabel[c.label] = [];
+        byLabel[c.label].push(c);
+      });
+      Object.keys(byLabel).forEach(function(l) {
+        byLabel[l].sort(function(a, b) { return b.strength - a.strength; });
+      });
+
+      var assigned = {};
+      LABEL_ORDER.forEach(function(label) {
+        (byLabel[label] || []).some(function(c) {
+          if (!assigned[c.uid]) { assigned[c.uid] = { emoji: c.emoji, label: c.label, tooltip: c.tooltip }; return true; }
+        });
+      });
+
+      // ── fallback: naturally unique badges ─────────────────────────────────────
+      var usedTitles = {};
+      allProfiles.forEach(function(p) {
+        if (assigned[p.uid]) return;
+        var picks = (p.movies || []).concat(p.tvShows || []);
+        for (var fi = 0; fi < Math.min(picks.length, 5); fi++) {
+          var pick = picks[fi];
+          if (pick && !usedTitles[pick.id]) {
+            usedTitles[pick.id] = true;
+            var short = (pick.title || "").length > 22 ? pick.title.slice(0, 22) + "\u2026" : pick.title;
+            var rankLabel = fi === 0 ? "#1" : fi === 1 ? "#2" : "#" + (fi + 1);
+            var rankEmoji = fi === 0 ? "\uD83E\uDD47" : fi === 1 ? "\uD83E\uDD48" : "\uD83E\uDD49";
+            assigned[p.uid] = { emoji: rankEmoji, label: rankLabel + ": " + short, tooltip: "Top pick: " + pick.title };
+            return;
           }
         }
-      }
-
-      // High rated taste (min 8 movies, top 10 avg rating >= 8.0)
-      if (movies.length >= 8) {
-        var top10 = movies.slice(0, 10).filter(function(m) { return m.rating; });
-        if (top10.length >= 5) {
-          var avg = top10.reduce(function(s, m) { return s + m.rating; }, 0) / top10.length;
-          if (avg >= 8.0) {
-            return { emoji: "\uD83C\uDFC5", label: "High Standards", tooltip: "Top 10 avg " + avg.toFixed(1) + " on TMDB" };
-          }
-          if (avg <= 6.8) {
-            return { emoji: "\uD83D\uDC8E", label: "Underdog Lover", tooltip: "Top 10 avg " + avg.toFixed(1) + " \u2014 loves the underrated" };
-          }
+        // Last resort: genre or decade of top pick
+        var top = picks[0];
+        if (top && top.genre) {
+          assigned[p.uid] = { emoji: "\uD83C\uDF9E\uFE0F", label: top.genre + " Fan", tooltip: "Their top pick is " + top.genre };
+        } else if (top && top.year) {
+          var dec = Math.floor(parseInt(top.year) / 10) * 10;
+          assigned[p.uid] = { emoji: "\uD83D\uDCC5", label: "Rooted in " + (dec % 100) + "s", tooltip: "Top pick from " + top.year };
+        } else {
+          assigned[p.uid] = { emoji: "\uD83C\uDFAB", label: "Getting Started", tooltip: "Building their list" };
         }
-      }
+      });
 
-      // Balanced movies + TV
-      if (movies.length >= 5 && tv.length >= 5) {
-        return { emoji: "\u2694\uFE0F", label: "Dual Threat", tooltip: movies.length + " movies and " + tv.length + " shows ranked" };
-      }
-
-      // Volume
-      if (total >= 50) {
-        return { emoji: "\uD83D\uDCDA", label: "Rank Veteran", tooltip: total + " titles ranked" };
-      }
-      if (total >= 20) {
-        return { emoji: "\uD83D\uDCDD", label: "Rising Ranker", tooltip: total + " titles ranked" };
-      }
-
-      // Fallback: use their #1 pick
-      var top1 = movies[0] || tv[0];
-      if (top1) {
-        var title = top1.title || "";
-        var short = title.length > 22 ? title.slice(0, 22) + "\u2026" : title;
-        return { emoji: "\uD83E\uDD47", label: "#1: " + short, tooltip: "Top pick: " + title };
-      }
-
-      return { emoji: "\uD83C\uDFAB", label: "Getting Started", tooltip: "Just starting out" };
+      var result = new Map();
+      allProfiles.forEach(function(p) {
+        result.set(p.uid, assigned[p.uid] || { emoji: "\uD83C\uDF31", label: "Fresh Face", tooltip: "Just joined!" });
+      });
+      return result;
     }
 
     function TrophyShelf({ trophies, onViewProfile }) {
@@ -3474,6 +3712,7 @@
       const [profiles, setProfiles] = useState([]);
       const [me, setMe] = useState(null);
       const [trophies, setTrophies] = useState([]);
+      const [badges, setBadges] = useState(new Map());
       const [loading, setLoading] = useState(true);
       const [showExplainer, setShowExplainer] = useState(false);
 
@@ -3496,6 +3735,10 @@
             };
           }
           setMe(mine || null);
+
+          // Compute unique personal badges across everyone (including synthesized me if not in list)
+          const allForBadges = mine && !p.find(pr => pr.uid === currentUid) ? [...p, mine] : p;
+          setBadges(computePersonalBadges(allForBadges));
 
           let filtered = p.filter(pr => pr.uid !== currentUid);
           // Compute compatibility scores and sort
@@ -3520,7 +3763,7 @@
       function renderCard(p, opts) {
         opts = opts || {};
         const isYou = !!opts.isYou;
-        const badge = computePersonalBadge(p);
+        const badge = badges.get(p.uid);
         return (
           <div key={p.uid} className={"community-card" + (isYou ? " community-card-you" : "")} onClick={() => onViewProfile(p.uid)}>
             {p.photoURL
