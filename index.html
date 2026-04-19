@@ -328,10 +328,43 @@
       padding: 3px 8px; border-radius: 10px;
       background: var(--surface2); color: var(--text);
       border: 1px solid var(--border); margin-top: 4px;
-      max-width: 100%; overflow: hidden;
+      max-width: 100%; overflow: hidden; cursor: pointer;
+      transition: transform 0.1s, border-color 0.15s;
     }
+    .personal-badge:hover { border-color: var(--accent); }
+    .personal-badge:active { transform: scale(0.96); }
     .personal-badge-emoji { font-size: 0.85rem; line-height: 1; }
     .personal-badge-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge-modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+      z-index: 1000; display: flex; align-items: center; justify-content: center;
+      padding: 20px; animation: fadeIn 0.15s;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .badge-modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px 22px; max-width: 320px; width: 100%;
+      text-align: center; position: relative;
+      animation: fadeInUp 0.2s;
+    }
+    .badge-modal-close {
+      position: absolute; top: 10px; right: 14px;
+      background: none; border: none; color: var(--text-muted);
+      font-size: 1.4rem; cursor: pointer; line-height: 1;
+    }
+    .badge-modal-emoji { font-size: 3rem; margin-bottom: 8px; line-height: 1; }
+    .badge-modal-label {
+      font-family: 'Outfit', sans-serif; font-weight: 700;
+      font-size: 1.05rem; margin-bottom: 4px;
+    }
+    .badge-modal-who { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 12px; }
+    .badge-modal-tooltip { font-size: 0.88rem; color: var(--text); line-height: 1.45; }
+    .badge-modal-action {
+      margin-top: 18px; padding: 9px 24px; background: var(--accent); color: #fff;
+      border: none; border-radius: 10px; font-weight: 700; font-size: 0.85rem;
+      cursor: pointer; letter-spacing: 0.3px;
+    }
+    .badge-modal-action:active { transform: scale(0.97); }
 
     /* Search */
     .search-section { position: relative; margin-bottom: 24px; }
@@ -3715,6 +3748,7 @@
       const [badges, setBadges] = useState(new Map());
       const [loading, setLoading] = useState(true);
       const [showExplainer, setShowExplainer] = useState(false);
+      const [badgeModal, setBadgeModal] = useState(null);
 
       useEffect(() => {
         loadCommunityProfiles().then(p => {
@@ -3783,7 +3817,11 @@
                 {" ranked"}
               </div>
               {badge && (
-                <div className="personal-badge" title={badge.tooltip}>
+                <div className="personal-badge" title={badge.tooltip}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBadgeModal({ ...badge, ownerName: p.displayName || "Anonymous", isYou: isYou });
+                  }}>
                   <span className="personal-badge-emoji">{badge.emoji}</span>
                   <span className="personal-badge-label">{badge.label}</span>
                 </div>
@@ -3879,6 +3917,18 @@
                 {profiles.map(p => renderCard(p))}
               </div>
             </>
+          )}
+          {badgeModal && (
+            <div className="badge-modal-backdrop" onClick={() => setBadgeModal(null)}>
+              <div className="badge-modal" onClick={(e) => e.stopPropagation()}>
+                <button className="badge-modal-close" onClick={() => setBadgeModal(null)}>&times;</button>
+                <div className="badge-modal-emoji">{badgeModal.emoji}</div>
+                <div className="badge-modal-label">{badgeModal.label}</div>
+                <div className="badge-modal-who">{badgeModal.isYou ? "Your trophy" : badgeModal.ownerName + "'s trophy"}</div>
+                <div className="badge-modal-tooltip">{badgeModal.tooltip}</div>
+                <button className="badge-modal-action" onClick={() => setBadgeModal(null)}>Got it</button>
+              </div>
+            </div>
           )}
         </div>
       );
