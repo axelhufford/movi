@@ -1685,15 +1685,72 @@
     }
 
     // ─── Binary Insertion ───────────────────────────────────────
+    const GENRE_MIN_PEERS = 3;
+
+    function globalIndexOf(list, movie) {
+      for (let i = 0; i < list.length; i++) {
+        if (list[i].id === movie.id) return i;
+      }
+      return -1;
+    }
+
     function createSession(newMovie, rankedList) {
+      if (newMovie.genre && rankedList.length > 0) {
+        const gs = buildGenreSession(newMovie, rankedList);
+        if (gs) return gs;
+      }
       const session = {
         newMovie, list: rankedList, low: 0, high: rankedList.length,
-        step: 0, maxSteps: Math.ceil(Math.log2(rankedList.length + 1)),
+        step: 0, maxSteps: Math.ceil(Math.log2(rankedList.length + 1)), phase: null,
       };
       return advanceSession(session);
     }
 
+    function buildGenreSession(newMovie, rankedList) {
+      const genreList = rankedList.filter(m => m.genre === newMovie.genre);
+      if (genreList.length < GENRE_MIN_PEERS) return null;
+      const phase1Steps = Math.ceil(Math.log2(genreList.length + 1));
+      const phase2StepsEst = Math.ceil(Math.log2(rankedList.length + 1));
+      return advanceSession({
+        newMovie, list: rankedList, genreList, genreInsertIdx: null,
+        phase: 1, low: 0, high: genreList.length,
+        step: 0, phase1Steps, phase2Steps: phase2StepsEst,
+        maxSteps: phase1Steps + phase2StepsEst,
+      });
+    }
+
+    function transitionToPhase2(session) {
+      const genreInsertIdx = session.low;
+      const { genreList, list } = session;
+      let globalLow, globalHigh;
+
+      if (genreInsertIdx === 0) {
+        globalLow = 0;
+        globalHigh = globalIndexOf(list, genreList[0]);
+      } else if (genreInsertIdx === genreList.length) {
+        globalLow = globalIndexOf(list, genreList[genreList.length - 1]) + 1;
+        globalHigh = list.length;
+      } else {
+        globalLow = globalIndexOf(list, genreList[genreInsertIdx - 1]) + 1;
+        globalHigh = globalIndexOf(list, genreList[genreInsertIdx]);
+      }
+
+      if (globalLow >= globalHigh) {
+        return { ...session, done: true, insertIndex: globalLow, genreInsertIdx, phase: 2 };
+      }
+      const phase2Steps = Math.ceil(Math.log2(globalHigh - globalLow + 1));
+      return advanceSession({
+        ...session, phase: 2, genreInsertIdx, low: globalLow, high: globalHigh,
+        phase2Steps, maxSteps: session.phase1Steps + phase2Steps,
+      });
+    }
+
     function advanceSession(session) {
+      if (session.phase === 1) {
+        if (session.low >= session.high) return transitionToPhase2(session);
+        const mid = Math.floor((session.low + session.high) / 2);
+        return { ...session, done: false, compareMovie: session.genreList[mid], mid };
+      }
       if (session.low >= session.high) return { ...session, done: true, insertIndex: session.low };
       const mid = Math.floor((session.low + session.high) / 2);
       return { ...session, done: false, compareMovie: session.list[mid], mid };
@@ -2488,7 +2545,13 @@
       if (!session || session.done) return null;
       const { newMovie, compareMovie, step, maxSteps } = session;
 
-      var compareScore = getScore(session.mid, session.list.length);
+      var compareScore;
+      if (session.phase === 1) {
+        const globalMid = globalIndexOf(session.list, session.genreList[session.mid]);
+        compareScore = globalMid >= 0 ? getScore(globalMid, session.list.length) : undefined;
+      } else {
+        compareScore = getScore(session.mid, session.list.length);
+      }
 
       function handleChoice(isNew) {
         if (picked) return;
@@ -2539,6 +2602,16 @@
               {stripCells}
             </div>
             <div className="comparison-strip-text">Comparison {step + 1} / ~{totalCells}</div>
+            {session.phase === 1 && (
+              <div style={{fontSize:"0.72rem", color:"var(--text-muted)", marginTop:2}}>
+                Finding rank among {newMovie.genre} movies\u2026
+              </div>
+            )}
+            {session.phase === 2 && (
+              <div style={{fontSize:"0.72rem", color:"var(--text-muted)", marginTop:2}}>
+                Pinpointing exact position\u2026
+              </div>
+            )}
             <div className="comparison-cards">
               <Card movie={newMovie} onClick={() => handleChoice(true)}
                 pickedState={picked === "new" ? "winner" : picked === "compare" ? "loser" : null} />
