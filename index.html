@@ -1525,7 +1525,8 @@
     // ─── Process Movie Database ─────────────────────────────────
     const TMDB_IMG = "https://image.tmdb.org/t/p/w200";
     const TMDB_IMG_LG = "https://image.tmdb.org/t/p/w300";
-    const TMDB_API_KEY = "39a17d2f20e6ebc19af8eadbf015f5ab";
+    const TMDB_API_KEY = (typeof TMDB_API_KEY_CONFIG !== "undefined" && TMDB_API_KEY_CONFIG)
+      ? TMDB_API_KEY_CONFIG : "39a17d2f20e6ebc19af8eadbf015f5ab";
     const TMDB_SEARCH_URL = "https://api.themoviedb.org/3/search/movie";
     // Rolling cutoff for "New Releases" — anything from the previous calendar year onward.
     const NEW_RELEASE_YEAR = new Date().getFullYear() - 1;
@@ -1582,6 +1583,8 @@
     // ─── Poster Component ───────────────────────────────────────
     function Poster({ poster, title, className, style, size }) {
       const [failed, setFailed] = React.useState(false);
+      // A new poster path deserves a fresh attempt
+      React.useEffect(() => { setFailed(false); }, [poster]);
       const base = size === "lg" ? TMDB_IMG_LG : TMDB_IMG;
       if (poster && !failed) {
         return <img src={`${base}${poster}`} alt={title} className={className} style={style} loading="lazy" onError={() => setFailed(true)} />;
@@ -2027,7 +2030,7 @@
         return {
           id: m.id,
           title: isTV ? m.name : m.title,
-          year: (isTV ? m.first_air_date : m.release_date || "").slice(0, 4),
+          year: ((isTV ? m.first_air_date : m.release_date) || "").slice(0, 4),
           genre: m.genre_ids && m.genre_ids.length ? (genreMap[m.genre_ids[0]] || "Drama") : "Drama",
           poster: m.poster_path || null,
           rating: m.vote_average || null,
@@ -2461,7 +2464,7 @@
           setSearching(false);
         }, 350);
         return () => clearTimeout(debounceRef.current);
-      }, [query]);
+      }, [query, activeFn]);
 
       // Merge: local first, then TMDB results not already in local
       const results = useMemo(() => {
@@ -2542,6 +2545,12 @@
     function ComparisonView({ session, onChoice, onCancel, onWatchlist, onSkip, itemLabel }) {
       const [picked, setPicked] = useState(null);
       useEffect(() => { setPicked(null); }, [session && session.step, session && session.newMovie && session.newMovie.id]);
+      useEffect(() => {
+        if (!session || session.done) return;
+        function handleKey(e) { if (e.key === "Escape") onCancel(); }
+        document.addEventListener("keydown", handleKey);
+        return () => document.removeEventListener("keydown", handleKey);
+      }, [session]);
       if (!session || session.done) return null;
       const { newMovie, compareMovie, step, maxSteps } = session;
 
@@ -2773,6 +2782,10 @@
               if (idx < displayList.length) {
                 beforeId = displayList[idx].id;
               }
+            } else if (displayList.length < filteredList.length) {
+              // List is truncated ("Show all" collapsed): dropping below the last
+              // visible item should land right there, not at the end of the full list
+              beforeId = filteredList[displayList.length].id;
             }
             onMove(draggedId, beforeId);
           }
@@ -2820,7 +2833,7 @@
       return (
         <div className="ranked-section">
           <div className="ranked-header">
-            <h2>{readOnly ? "Rankings" : "Your Rankings"} ({genreFilter ? `${displayList.length} of ${total} \u00b7 ${genreFilter}` : total})</h2>
+            <h2>{readOnly ? "Rankings" : "Your Rankings"} ({genreFilter ? `${filteredList.length} of ${total} \u00b7 ${genreFilter}` : total})</h2>
             {!readOnly && (
               <div className="ranked-header-btns">
                 {user && onTogglePrivate && (
@@ -3764,8 +3777,8 @@
     }
 
     function TrophyShelf({ trophies, onViewProfile }) {
-      if (!trophies || trophies.length === 0) return null;
       const [selected, setSelected] = useState(null);
+      if (!trophies || trophies.length === 0) return null;
 
       function renderAvatar(p) {
         if (!p) return null;
@@ -3825,8 +3838,10 @@
 
       useEffect(() => {
         loadCommunityProfiles().then(p => {
-          // Compute trophies using ALL profiles (including current user)
-          setTrophies(computeTrophies(p));
+          // Compute trophies using all non-private profiles (including current user).
+          // Private users opted out of sharing rankings, so their data shouldn't
+          // surface through awards like "Hottest Take: #1 <title>".
+          setTrophies(computeTrophies(p.filter(pr => !pr.isPrivate)));
 
           // Split out current user
           let mine = currentUid ? p.find(pr => pr.uid === currentUid) : null;
@@ -3899,7 +3914,7 @@
                   <span className="personal-badge-label">{badge.label}</span>
                 </div>
               )}
-              {p.movies && p.movies.length > 0 && (
+              {p.movies && p.movies.length > 0 && (!p.isPrivate || isAdmin || isYou) && (
                 <div className="community-card-top">
                   {p.movies.slice(0, 5).map(m => (
                     <Poster key={m.id} poster={m.poster} title={m.title}
@@ -4389,18 +4404,28 @@
       var [tmdbDetail, setTmdbDetail] = useState(null);
       var [detailLoading, setDetailLoading] = useState(false);
 
+      // Close on Escape
+      useEffect(function() {
+        if (!movie) return;
+        function handleKey(e) { if (e.key === "Escape") onClose(); }
+        document.addEventListener("keydown", handleKey);
+        return function() { document.removeEventListener("keydown", handleKey); };
+      }, [movie && movie.id]);
+
       // Fetch TMDB details when movie changes
       useEffect(function() {
         if (!movie || !TMDB_API_KEY) { setTmdbDetail(null); return; }
         // Only fetch for real TMDB IDs (not custom entries)
         if (typeof movie.id === "string" && movie.id.indexOf("custom_") === 0) { setTmdbDetail(null); return; }
 
+        var cancelled = false;
         setDetailLoading(true);
         setTmdbDetail(null);
         var type = isTV ? "tv" : "movie";
         var detailUrl = "https://api.themoviedb.org/3/" + type + "/" + movie.id + "?api_key=" + TMDB_API_KEY + "&language=en-US&append_to_response=credits";
 
         fetch(detailUrl).then(function(r) { return r.json(); }).then(function(data) {
+          if (cancelled) return; // a newer movie was opened; drop this stale response
           var director = "";
           var cast = [];
           if (data.credits) {
@@ -4423,7 +4448,8 @@
             seasons: data.number_of_seasons || null,
           });
           setDetailLoading(false);
-        }).catch(function() { setDetailLoading(false); });
+        }).catch(function() { if (!cancelled) setDetailLoading(false); });
+        return function() { cancelled = true; };
       }, [movie && movie.id, isTV]);
 
       if (!movie) return null;
@@ -4545,13 +4571,14 @@
       const tvWatchlistIds = new Set(tvWatchlist.map(m => m.id));
       const activeWatchlistIds = isTV ? tvWatchlistIds : watchlistIds;
 
-      // Apply theme to body background
+      // Apply theme to body background. Only set background-color — setting the
+      // `background` shorthand inline would override the stylesheet's
+      // background-image gradients (hero glow, day-mode wash).
       useEffect(() => {
-        if (dayMode) {
-          document.body.style.background = isTV ? "#F5FAF7" : "#FAF8F5";
-        } else {
-          document.body.style.background = isTV ? "#0D120F" : "#0F0E0D";
-        }
+        document.body.style.background = "";
+        document.body.style.backgroundColor = dayMode
+          ? (isTV ? "#F5FAF7" : "#FBF7F0")
+          : (isTV ? "#0D120F" : "#0F0E0D");
       }, [isTV, dayMode]);
 
       // Persist day mode preference
@@ -4570,7 +4597,9 @@
           ));
         }
 
-        const needsRating = list.filter(m => m.rating == null);
+        // Custom entries have no TMDB id — fetching them would 404 on every load
+        const needsRating = list.filter(m => m.rating == null
+          && !(typeof m.id === "string" && m.id.indexOf("custom_") === 0));
         console.log("[Backfill]", type, "needs rating:", needsRating.length, "of", list.length);
 
         // Fetch ratings for movies that don't have them yet
@@ -4700,7 +4729,10 @@
       function undoLastImport() {
         const backup = localStorage.getItem("movi-import-backup");
         if (!backup) { showToast("No import to undo"); return; }
-        setRankedList(JSON.parse(backup));
+        let restored;
+        try { restored = JSON.parse(backup); } catch { restored = null; }
+        if (!Array.isArray(restored)) { showToast("Import backup is corrupted — cannot undo."); return; }
+        setRankedList(restored);
         localStorage.removeItem("movi-import-backup");
         localStorage.removeItem("movi-import-backup-time");
         showToast("Rankings restored to pre-import state!");
@@ -4905,9 +4937,15 @@
         setActiveWatchlist(prev => prev.filter(m => m.id !== id));
       }
 
+      // A movie that just got ranked should no longer sit on the watchlist
+      function removeFromWatchlistById(id, useTV) {
+        const setWl = useTV ? setTvWatchlist : setWatchlist;
+        setWl(prev => prev.filter(m => m.id !== id));
+      }
+
       function handleWatchedIt(movie) {
-        // Remove from watchlist, then trigger ranking flow
-        setActiveWatchlist(prev => prev.filter(m => m.id !== movie.id));
+        // Keep it on the watchlist until ranking actually completes,
+        // so cancelling the comparison doesn't lose the item.
         handleSelectMovie(movie);
       }
 
@@ -4920,6 +4958,8 @@
         const targetSetSession = useTV ? setTvSession : setSession;
 
         if (targetIds.has(movie.id)) {
+          // Already ranked — make sure it isn't lingering on the watchlist too
+          removeFromWatchlistById(movie.id, useTV);
           showToast(`"${movie.title}" is already ranked!`);
           return;
         }
@@ -4931,6 +4971,7 @@
 
         if (targetList.length === 0) {
           targetSetList([movie]);
+          removeFromWatchlistById(movie.id, useTV);
           const score = getScore(0, 1);
           showToast(`"${movie.title}" added as #1 (${score.toFixed(1)})!`);
           return;
@@ -4942,6 +4983,7 @@
           const newList = [...targetList];
           newList.splice(s.insertIndex, 0, movie);
           targetSetList(newList);
+          removeFromWatchlistById(movie.id, useTV);
           const score = getScore(s.insertIndex, newList.length);
           showToast(`"${movie.title}" ranked #${s.insertIndex + 1} (${score.toFixed(1)})!`);
         } else {
@@ -4969,6 +5011,8 @@
         // Start fresh binary search on the filtered list
         var s = createSession(movie, filtered);
         s._isTV = useTV;
+        // Snapshot the pre-removal list so Cancel can restore the original position
+        s._restoreList = targetList;
         if (s.done) {
           var newList = filtered.slice();
           newList.splice(s.insertIndex, 0, movie);
@@ -4978,6 +5022,17 @@
         } else {
           targetSetSession(s);
         }
+      }
+
+      function handleCancelSession() {
+        var s = activeSession;
+        if (s && s._restoreList) {
+          // Re-rank was in progress: put the movie back where it was
+          var setList = s._isTV ? setTvRankedList : setRankedList;
+          setList(s._restoreList);
+          showToast("\"" + s.newMovie.title + "\" kept at its original rank.");
+        }
+        setActiveSession(null);
       }
 
       function handleCantDecide() {
@@ -5001,6 +5056,7 @@
           const newList = [...choiceList];
           newList.splice(next.insertIndex, 0, next.newMovie);
           choiceSetList(newList);
+          removeFromWatchlistById(next.newMovie.id, sessionIsTV);
           const score = getScore(next.insertIndex, newList.length);
           showToast(`"${next.newMovie.title}" ranked #${next.insertIndex + 1} (${score.toFixed(1)})!`);
           choiceSetSession(null);
@@ -5094,7 +5150,7 @@
                 isAdmin={user && user.uid === ADMIN_UID}
                 onTabChange={(tab) => setMode(tab === "tv" ? "tv" : "movies")}
                 onMovieClick={setDetailMovie} />
-              <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
+              <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={handleCancelSession}
                 onWatchlist={handleAddToWatchlistFromComparison}
                 onSkip={handleCantDecide}
                 itemLabel={isTV ? "TV show" : "movie"} />
@@ -5253,7 +5309,7 @@
               myMovies={rankedList} myTv={tvRankedList} />
           )}
 
-          <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={() => setActiveSession(null)}
+          <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={handleCancelSession}
             onWatchlist={handleAddToWatchlistFromComparison}
             onSkip={handleCantDecide}
             itemLabel={isTV ? "TV show" : "movie"} />
