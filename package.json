@@ -1,0 +1,10 @@
+{
+  "name": "movi",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/app.jsx --outfile=app.js --jsx=transform --target=es2020 --sourcemap"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}
