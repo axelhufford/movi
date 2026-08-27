@@ -119,7 +119,11 @@ const SHARE_LAYOUTS = {
     footerSize: 40,
     taglineSize: 22,
     taglineGap: 32,
-    heroTitleSizes: [54, 48, 42, 36]
+    heroTitleSizes: [54, 48, 42, 36],
+    rankSize: 44,
+    rankBadgeH: 74,
+    scoreSize: 76,
+    scorePillH: 112
   },
   // Kept clear of the Story UI: nothing above y=200 or below y=1760.
   story: {
@@ -147,13 +151,17 @@ const SHARE_LAYOUTS = {
     footerSize: 46,
     taglineSize: 25,
     taglineGap: 38,
-    heroTitleSizes: [60, 53, 46, 40]
+    heroTitleSizes: [60, 53, 46, 40],
+    rankSize: 50,
+    rankBadgeH: 84,
+    scoreSize: 86,
+    scorePillH: 126
   }
 };
-function shareScoreColor(score) {
-  if (score >= 7) return "#4fb96a";
-  if (score >= 4) return "#f5c518";
-  return "#9A968E";
+function shareScoreRGB(score) {
+  if (score >= 7) return "79,185,106";
+  if (score >= 4) return "245,197,24";
+  return "154,150,142";
 }
 function loadImageCORS(url) {
   return new Promise(function(resolve) {
@@ -484,6 +492,16 @@ async function renderShareCard(opts) {
   ctx.restore();
   if (heroImg) drawImageCover(ctx, heroImg, L.heroX, L.heroY, L.heroW, L.heroH, 20);
   else drawPosterPlaceholder(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20, theme);
+  var scoreRGB = shareScoreRGB(opts.score);
+  var scoreLabel = opts.score.toFixed(1);
+  var sufSize = Math.round(L.scoreSize * 0.34);
+  ctx.font = "900 " + L.scoreSize + "px " + OUTFIT;
+  var scoreW = ctx.measureText(scoreLabel).width;
+  ctx.font = "700 " + sufSize + "px " + OUTFIT;
+  var sufW = ctx.measureText("/10").width;
+  var pillPad = Math.round(L.scoreSize * 0.4);
+  var pillW = scoreW + 8 + sufW + pillPad * 2;
+  var pillH = L.scorePillH;
   ctx.save();
   roundRectPath(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20);
   ctx.clip();
@@ -501,7 +519,8 @@ async function renderShareCard(opts) {
   ctx.font = "400 26px " + DMSANS;
   ctx.fillStyle = "rgba(245,243,239,0.72)";
   var meta = [opts.movie.year, opts.movie.genre].filter(Boolean).join("  \xB7  ");
-  ctx.fillText(truncateToWidth(ctx, meta, tMaxW), tx, metaBaseline);
+  var metaMaxW = Math.max(150, L.heroW - pillW - 18);
+  ctx.fillText(truncateToWidth(ctx, meta, metaMaxW), tx, metaBaseline);
   var fitted = fitText(ctx, opts.movie.title, tMaxW, 2, L.heroTitleSizes, "800", OUTFIT);
   ctx.fillStyle = "#FFFFFF";
   var lh = fitted.size * 1.14;
@@ -518,12 +537,12 @@ async function renderShareCard(opts) {
   ctx.stroke();
   ctx.restore();
   ctx.save();
-  ctx.font = "900 58px " + OUTFIT;
+  ctx.font = "900 " + L.rankSize + "px " + OUTFIT;
   var rankLabel = "#" + opts.rank;
-  var badgeW = Math.max(112, ctx.measureText(rankLabel).width + 48);
-  var badgeH = 92;
-  var badgeX = L.heroX - 30;
-  var badgeY = L.heroY - 34;
+  var badgeW = Math.max(92, ctx.measureText(rankLabel).width + 38);
+  var badgeH = L.rankBadgeH;
+  var badgeX = L.heroX - 24;
+  var badgeY = L.heroY - 28;
   ctx.shadowColor = "rgba(0,0,0,0.55)";
   ctx.shadowBlur = 28;
   ctx.shadowOffsetY = 8;
@@ -536,28 +555,32 @@ async function renderShareCard(opts) {
   ctx.shadowColor = "transparent";
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
-  ctx.fillText(rankLabel, badgeX + badgeW / 2, badgeY + badgeH / 2 + 21);
+  ctx.fillText(rankLabel, badgeX + badgeW / 2, badgeY + badgeH / 2 + Math.round(L.rankSize * 0.36));
   ctx.restore();
   ctx.save();
-  ctx.font = "800 44px " + OUTFIT;
-  var scoreLabel = opts.score.toFixed(1);
-  var pillW = Math.max(128, ctx.measureText(scoreLabel).width + 56);
-  var pillH = 76;
   var pillX = L.heroX + L.heroW + 26 - pillW;
   var pillY = L.heroY + L.heroH - pillH / 2 - 10;
-  ctx.shadowColor = "rgba(0,0,0,0.55)";
-  ctx.shadowBlur = 24;
-  ctx.shadowOffsetY = 8;
+  ctx.shadowColor = "rgba(0,0,0,0.6)";
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 10;
   roundRectPath(ctx, pillX, pillY, pillW, pillH, pillH / 2);
-  ctx.fillStyle = theme.surface2;
+  ctx.fillStyle = "rgba(12,10,9,0.94)";
   ctx.fill();
   ctx.shadowColor = "transparent";
-  ctx.strokeStyle = "rgba(255,255,255,0.14)";
-  ctx.lineWidth = 2;
+  roundRectPath(ctx, pillX, pillY, pillW, pillH, pillH / 2);
+  ctx.fillStyle = "rgba(" + scoreRGB + ",0.16)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(" + scoreRGB + ",0.55)";
+  ctx.lineWidth = 3;
   ctx.stroke();
-  ctx.fillStyle = shareScoreColor(opts.score);
-  ctx.textAlign = "center";
-  ctx.fillText(scoreLabel, pillX + pillW / 2, pillY + pillH / 2 + 16);
+  var baseline = pillY + pillH / 2 + Math.round(L.scoreSize * 0.35);
+  ctx.textAlign = "left";
+  ctx.font = "900 " + L.scoreSize + "px " + OUTFIT;
+  ctx.fillStyle = "rgb(" + scoreRGB + ")";
+  ctx.fillText(scoreLabel, pillX + pillPad, baseline);
+  ctx.font = "700 " + sufSize + "px " + OUTFIT;
+  ctx.fillStyle = "rgba(" + scoreRGB + ",0.6)";
+  ctx.fillText("/10", pillX + pillPad + scoreW + 8, baseline);
   ctx.restore();
   ctx.save();
   ctx.textAlign = "center";
