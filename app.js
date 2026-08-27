@@ -10,6 +10,8 @@ if (FIREBASE_READY) {
 const ADMIN_UID = "lF7taXh4NETa3h2UPZI6SGnWWcj2";
 const TMDB_IMG = "https://image.tmdb.org/t/p/w200";
 const TMDB_IMG_LG = "https://image.tmdb.org/t/p/w300";
+const TMDB_IMG_XL = "https://image.tmdb.org/t/p/w500";
+const TMDB_IMG_MD = "https://image.tmdb.org/t/p/w342";
 const TMDB_API_KEY = typeof TMDB_API_KEY_CONFIG !== "undefined" && TMDB_API_KEY_CONFIG ? TMDB_API_KEY_CONFIG : "39a17d2f20e6ebc19af8eadbf015f5ab";
 const TMDB_SEARCH_URL = "https://api.themoviedb.org/3/search/movie";
 const NEW_RELEASE_YEAR = (/* @__PURE__ */ new Date()).getFullYear() - 1;
@@ -79,6 +81,512 @@ function scoreClass(score) {
   if (score >= 7) return "score-high";
   if (score >= 4) return "score-mid";
   return "score-low";
+}
+const SHARE_SITE_URL = "https://movirank.com";
+const SHARE_TAGLINE = "Every movie ranked, one matchup at a time.";
+const SHARE_TAGLINE_TV = "Every show ranked, one matchup at a time.";
+const SHARE_THEMES = {
+  movie: { bg: "#0F0E0D", surface: "#1C1A18", surface2: "#262320", accent: "#FF4D4D", accentGlow: "rgba(255,77,77,0.22)", accentSoft: "rgba(255,77,77,0.07)" },
+  tv: { bg: "#0D120F", surface: "#151C18", surface2: "#1E2722", accent: "#00875A", accentGlow: "rgba(0,135,90,0.24)", accentSoft: "rgba(0,135,90,0.09)" }
+};
+const SHARE_TEXT = "#F5F3EF";
+const SHARE_MUTED = "#9A968E";
+const OUTFIT = '"Outfit", "Helvetica Neue", Arial, sans-serif';
+const DMSANS = '"DM Sans", "Helvetica Neue", Arial, sans-serif';
+const SHARE_LAYOUTS = {
+  feed: {
+    w: 1080,
+    h: 1350,
+    pad: 72,
+    logoY: 40,
+    logoScale: 0.88,
+    wordmarkY: 166,
+    wordmarkSize: 52,
+    wordmarkTrack: 15,
+    bylineY: 208,
+    bylineSize: 24,
+    bylineTrack: 4,
+    rowH: 126,
+    posterW: 84,
+    rowGap: 24,
+    aboveY: 232,
+    heroY: 382,
+    heroX: 305,
+    heroW: 470,
+    heroH: 705,
+    belowY: 1124,
+    footerY: 1296,
+    footerSize: 40,
+    taglineSize: 22,
+    taglineGap: 32,
+    heroTitleSizes: [54, 48, 42, 36]
+  },
+  // Kept clear of the Story UI: nothing above y=200 or below y=1760.
+  story: {
+    w: 1080,
+    h: 1920,
+    pad: 80,
+    logoY: 210,
+    logoScale: 1,
+    wordmarkY: 360,
+    wordmarkSize: 60,
+    wordmarkTrack: 17,
+    bylineY: 412,
+    bylineSize: 27,
+    bylineTrack: 4,
+    rowH: 150,
+    posterW: 100,
+    rowGap: 28,
+    aboveY: 452,
+    heroY: 626,
+    heroX: 270,
+    heroW: 540,
+    heroH: 810,
+    belowY: 1490,
+    footerY: 1706,
+    footerSize: 46,
+    taglineSize: 25,
+    taglineGap: 38,
+    heroTitleSizes: [60, 53, 46, 40]
+  }
+};
+function shareScoreColor(score) {
+  if (score >= 7) return "#4fb96a";
+  if (score >= 4) return "#f5c518";
+  return "#9A968E";
+}
+function loadImageCORS(url) {
+  return new Promise(function(resolve) {
+    if (!url) {
+      resolve(null);
+      return;
+    }
+    var settled = false;
+    var done = function(v) {
+      if (!settled) {
+        settled = true;
+        resolve(v);
+      }
+    };
+    var img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = function() {
+      done(img);
+    };
+    img.onerror = function() {
+      done(null);
+    };
+    img.src = url;
+    setTimeout(function() {
+      done(null);
+    }, 6e3);
+  });
+}
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
+  var rr = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+function drawImageCover(ctx, img, x, y, w, h, r) {
+  ctx.save();
+  roundRectPath(ctx, x, y, w, h, r);
+  ctx.clip();
+  var iw = img.naturalWidth || img.width;
+  var ih = img.naturalHeight || img.height;
+  var scale = Math.max(w / iw, h / ih);
+  var dw = iw * scale;
+  var dh = ih * scale;
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  ctx.restore();
+}
+function truncateToWidth(ctx, text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  var lo = 0, hi = text.length;
+  while (lo < hi) {
+    var mid = Math.ceil((lo + hi) / 2);
+    if (ctx.measureText(text.slice(0, mid) + "\u2026").width <= maxW) lo = mid;
+    else hi = mid - 1;
+  }
+  return text.slice(0, lo).replace(/\s+$/, "") + "\u2026";
+}
+function wrapText(ctx, text, maxW, maxLines) {
+  var words = String(text == null ? "" : text).split(/\s+/).filter(Boolean);
+  var lines = [];
+  var cur = "";
+  var i = 0;
+  while (i < words.length && lines.length < maxLines) {
+    var trial = cur ? cur + " " + words[i] : words[i];
+    if (!cur || ctx.measureText(trial).width <= maxW) {
+      cur = trial;
+      i++;
+    } else {
+      lines.push(cur);
+      cur = "";
+    }
+  }
+  if (cur && lines.length < maxLines) {
+    lines.push(cur);
+    cur = "";
+  }
+  if (!lines.length) return [];
+  var last = lines.length - 1;
+  var leftover = i < words.length || cur;
+  lines[last] = truncateToWidth(ctx, leftover ? lines[last] + " " + (words[i] || "") : lines[last], maxW);
+  return lines;
+}
+function fitText(ctx, text, maxW, maxLines, sizes, weight, family) {
+  for (var i = 0; i < sizes.length; i++) {
+    ctx.font = weight + " " + sizes[i] + "px " + family;
+    var lines = wrapText(ctx, text, maxW, maxLines);
+    var clipped = lines.some(function(l) {
+      return l.slice(-1) === "\u2026";
+    });
+    if (!clipped) return { size: sizes[i], lines };
+  }
+  var small = sizes[sizes.length - 1];
+  ctx.font = weight + " " + small + "px " + family;
+  return { size: small, lines: wrapText(ctx, text, maxW, maxLines) };
+}
+function trackedWidth(ctx, text, tracking) {
+  var w = 0;
+  for (var i = 0; i < text.length; i++) w += ctx.measureText(text[i]).width + tracking;
+  return w - (text.length ? tracking : 0);
+}
+function drawTracked(ctx, text, cx, y, tracking, align) {
+  var total = trackedWidth(ctx, text, tracking);
+  var x = align === "left" ? cx : align === "right" ? cx - total : cx - total / 2;
+  var prev = ctx.textAlign;
+  ctx.textAlign = "left";
+  for (var i = 0; i < text.length; i++) {
+    ctx.fillText(text[i], x, y);
+    x += ctx.measureText(text[i]).width + tracking;
+  }
+  ctx.textAlign = prev;
+  return total;
+}
+function drawFilmGlyph(ctx, cx, cy, scale, color) {
+  ctx.save();
+  ctx.translate(cx - 31 * scale, cy - 41 * scale);
+  ctx.scale(scale, scale);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 3;
+  roundRectPath(ctx, 0, 0, 62, 82, 4);
+  ctx.stroke();
+  roundRectPath(ctx, 24, 5, 14, 5, 1);
+  ctx.fill();
+  roundRectPath(ctx, 24, 72, 14, 5, 1);
+  ctx.fill();
+  ctx.restore();
+}
+function drawPosterPlaceholder(ctx, x, y, w, h, r, theme) {
+  ctx.save();
+  roundRectPath(ctx, x, y, w, h, r);
+  ctx.fillStyle = theme.surface2;
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.clip();
+  drawFilmGlyph(ctx, x + w / 2, y + h * 0.42, Math.max(0.5, w / 190), "rgba(245,243,239,0.16)");
+  ctx.restore();
+}
+function drawLogoStrip(ctx, cx, top, scale, theme) {
+  ctx.save();
+  ctx.translate(cx - 198 * scale / 2, top);
+  ctx.scale(scale, scale);
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "center";
+  var idle = function(fx, label) {
+    roundRectPath(ctx, fx, 8, 62, 74, 3);
+    ctx.fillStyle = "rgba(255,255,255,0.025)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.13)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    roundRectPath(ctx, fx + 24, 12, 14, 4, 1);
+    ctx.fill();
+    roundRectPath(ctx, fx + 24, 74, 14, 4, 1);
+    ctx.fill();
+    ctx.font = "800 30px " + OUTFIT;
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.fillText(label, fx + 31, 56);
+  };
+  idle(0, "3");
+  idle(136, "2");
+  ctx.save();
+  ctx.translate(93, 45);
+  ctx.scale(1.1, 1.1);
+  ctx.translate(-93, -45);
+  roundRectPath(ctx, 62, 0, 62, 82, 3);
+  ctx.fillStyle = theme.accentSoft;
+  ctx.fill();
+  ctx.strokeStyle = theme.accent;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = theme.accent;
+  ctx.globalAlpha = 0.28;
+  roundRectPath(ctx, 86, 4, 14, 4, 1);
+  ctx.fill();
+  roundRectPath(ctx, 86, 74, 14, 4, 1);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.font = "800 30px " + OUTFIT;
+  ctx.fillText("1", 93, 53);
+  ctx.restore();
+  ctx.restore();
+}
+function drawNeighborRow(ctx, L, y, entry, rank, img, theme) {
+  var h = L.rowH;
+  var pw = L.posterW;
+  var px = L.pad + 96;
+  ctx.save();
+  ctx.globalAlpha = 0.62;
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "right";
+  ctx.font = "800 40px " + OUTFIT;
+  ctx.fillStyle = "rgba(245,243,239,0.45)";
+  ctx.fillText("#" + rank, L.pad + 78, y + h / 2 + 14);
+  if (img) drawImageCover(ctx, img, px, y, pw, h, 8);
+  else drawPosterPlaceholder(ctx, px, y, pw, h, 8, theme);
+  var tx = px + pw + L.rowGap;
+  var maxW = L.w - tx - L.pad;
+  ctx.textAlign = "left";
+  ctx.fillStyle = SHARE_TEXT;
+  var fitted = fitText(ctx, entry.title, maxW, 1, [36, 32, 28], "600", OUTFIT);
+  ctx.fillText(fitted.lines[0] || "", tx, y + h / 2 + 2);
+  ctx.font = "400 26px " + DMSANS;
+  ctx.fillStyle = SHARE_MUTED;
+  var meta = [entry.year, entry.genre].filter(Boolean).join("  \xB7  ");
+  ctx.fillText(truncateToWidth(ctx, meta, maxW), tx, y + h / 2 + 42);
+  ctx.restore();
+}
+function drawSentinelRow(ctx, L, y, label) {
+  var h = L.rowH;
+  var cy = y + h / 2;
+  ctx.save();
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "center";
+  ctx.font = "700 26px " + OUTFIT;
+  ctx.fillStyle = "rgba(245,243,239,0.34)";
+  var w = drawTracked(ctx, label, L.w / 2, cy, 4, "center");
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(L.pad, cy);
+  ctx.lineTo(L.w / 2 - w / 2 - 28, cy);
+  ctx.moveTo(L.w / 2 + w / 2 + 28, cy);
+  ctx.lineTo(L.w - L.pad, cy);
+  ctx.stroke();
+  ctx.restore();
+}
+async function renderShareCard(opts) {
+  var L = SHARE_LAYOUTS[opts.format] || SHARE_LAYOUTS.feed;
+  var theme = opts.isTV ? SHARE_THEMES.tv : SHARE_THEMES.movie;
+  var kind = opts.isTV ? "TV" : "MOVIE";
+  var glyphs = (opts.movie.title || "") + (opts.movie.genre || "") + (opts.displayName || "");
+  try {
+    await Promise.all([
+      document.fonts.load('900 60px "Outfit"', "MOVI0123456789#"),
+      document.fonts.load('800 56px "Outfit"', glyphs + "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+      document.fonts.load('600 36px "Outfit"', glyphs),
+      document.fonts.load('400 28px "DM Sans"', glyphs + SHARE_TAGLINE + SHARE_TAGLINE_TV + SHARE_SITE_URL)
+    ]);
+    await document.fonts.ready;
+  } catch (e) {
+  }
+  var loads = [
+    loadImageCORS(opts.movie.poster ? TMDB_IMG_XL + opts.movie.poster : null),
+    loadImageCORS(opts.above && opts.above.poster ? TMDB_IMG_MD + opts.above.poster : null),
+    loadImageCORS(opts.below && opts.below.poster ? TMDB_IMG_MD + opts.below.poster : null)
+  ];
+  var imgs = await Promise.all(loads);
+  var heroImg = imgs[0], aboveImg = imgs[1], belowImg = imgs[2];
+  var canvas = document.createElement("canvas");
+  canvas.width = L.w;
+  canvas.height = L.h;
+  var ctx = canvas.getContext("2d");
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = theme.bg;
+  ctx.fillRect(0, 0, L.w, L.h);
+  var canBlur = false;
+  try {
+    ctx.filter = "blur(2px)";
+    canBlur = ctx.filter !== "none";
+    ctx.filter = "none";
+  } catch (e) {
+  }
+  if (heroImg && canBlur) {
+    ctx.save();
+    ctx.filter = "blur(60px)";
+    ctx.globalAlpha = 0.22;
+    drawImageCover(ctx, heroImg, -80, -80, L.w + 160, L.h + 160, 0);
+    ctx.restore();
+    ctx.filter = "none";
+  }
+  var gx = L.heroX + L.heroW / 2;
+  var gy = L.heroY + L.heroH / 2;
+  var glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, L.w * 0.85);
+  glow.addColorStop(0, theme.accentGlow);
+  glow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, L.w, L.h);
+  ctx.strokeStyle = "rgba(255,255,255,0.018)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (var gxr = 0; gxr <= L.w; gxr += 36) {
+    ctx.moveTo(gxr + 0.5, 0);
+    ctx.lineTo(gxr + 0.5, L.h);
+  }
+  for (var gyr = 0; gyr <= L.h; gyr += 36) {
+    ctx.moveTo(0, gyr + 0.5);
+    ctx.lineTo(L.w, gyr + 0.5);
+  }
+  ctx.stroke();
+  var fade = ctx.createLinearGradient(0, L.h - 320, 0, L.h);
+  fade.addColorStop(0, "rgba(0,0,0,0)");
+  fade.addColorStop(1, "rgba(0,0,0,0.72)");
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, L.h - 320, L.w, 320);
+  drawLogoStrip(ctx, L.w / 2, L.logoY, L.logoScale, theme);
+  ctx.font = "900 " + L.wordmarkSize + "px " + OUTFIT;
+  ctx.fillStyle = SHARE_TEXT;
+  drawTracked(ctx, "MOVI", L.w / 2, L.wordmarkY, L.wordmarkTrack, "center");
+  var who = (opts.displayName || "").trim();
+  var first = who ? who.split(/\s+/)[0].toUpperCase() : "";
+  var byline;
+  if (opts.total <= 1) byline = "MY FIRST RANKED " + kind;
+  else byline = (first ? first + "'S " : "MY ") + kind + " RANKING \xB7 " + opts.total + " RANKED";
+  ctx.font = "700 " + L.bylineSize + "px " + OUTFIT;
+  ctx.fillStyle = SHARE_MUTED;
+  drawTracked(ctx, byline, L.w / 2, L.bylineY, L.bylineTrack, "center");
+  if (opts.above) drawNeighborRow(ctx, L, L.aboveY, opts.above, opts.rank - 1, aboveImg, theme);
+  else drawSentinelRow(ctx, L, L.aboveY, "\u25B2  TOP OF MY LIST");
+  if (opts.below) drawNeighborRow(ctx, L, L.belowY, opts.below, opts.rank + 1, belowImg, theme);
+  else drawSentinelRow(ctx, L, L.belowY, "\u25BC  BOTTOM OF MY LIST");
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.65)";
+  ctx.shadowBlur = 60;
+  ctx.shadowOffsetY = 18;
+  roundRectPath(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20);
+  ctx.fillStyle = theme.surface;
+  ctx.fill();
+  ctx.restore();
+  if (heroImg) drawImageCover(ctx, heroImg, L.heroX, L.heroY, L.heroW, L.heroH, 20);
+  else drawPosterPlaceholder(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20, theme);
+  ctx.save();
+  roundRectPath(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20);
+  ctx.clip();
+  var scrimTop = L.heroY + L.heroH - 300;
+  var scrim = ctx.createLinearGradient(0, scrimTop, 0, L.heroY + L.heroH);
+  scrim.addColorStop(0, "rgba(0,0,0,0)");
+  scrim.addColorStop(0.55, "rgba(0,0,0,0.72)");
+  scrim.addColorStop(1, "rgba(0,0,0,0.94)");
+  ctx.fillStyle = scrim;
+  ctx.fillRect(L.heroX, scrimTop, L.heroW, 300);
+  var tx = L.heroX + 28;
+  var tMaxW = L.heroW - 56;
+  var metaBaseline = L.heroY + L.heroH - 40;
+  ctx.textAlign = "left";
+  ctx.font = "400 26px " + DMSANS;
+  ctx.fillStyle = "rgba(245,243,239,0.72)";
+  var meta = [opts.movie.year, opts.movie.genre].filter(Boolean).join("  \xB7  ");
+  ctx.fillText(truncateToWidth(ctx, meta, tMaxW), tx, metaBaseline);
+  var fitted = fitText(ctx, opts.movie.title, tMaxW, 2, L.heroTitleSizes, "800", OUTFIT);
+  ctx.fillStyle = "#FFFFFF";
+  var lh = fitted.size * 1.14;
+  var titleBottom = metaBaseline - 46;
+  for (var li = 0; li < fitted.lines.length; li++) {
+    var yy = titleBottom - (fitted.lines.length - 1 - li) * lh;
+    ctx.fillText(fitted.lines[li], tx, yy);
+  }
+  ctx.restore();
+  ctx.save();
+  roundRectPath(ctx, L.heroX + 1.5, L.heroY + 1.5, L.heroW - 3, L.heroH - 3, 19);
+  ctx.strokeStyle = theme.accent;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.font = "900 58px " + OUTFIT;
+  var rankLabel = "#" + opts.rank;
+  var badgeW = Math.max(112, ctx.measureText(rankLabel).width + 48);
+  var badgeH = 92;
+  var badgeX = L.heroX - 30;
+  var badgeY = L.heroY - 34;
+  ctx.shadowColor = "rgba(0,0,0,0.55)";
+  ctx.shadowBlur = 28;
+  ctx.shadowOffsetY = 8;
+  var bg = ctx.createLinearGradient(badgeX, badgeY, badgeX + badgeW, badgeY + badgeH);
+  bg.addColorStop(0, theme.accent);
+  bg.addColorStop(1, opts.isTV ? "#2DAF7C" : "#FF7A3D");
+  roundRectPath(ctx, badgeX, badgeY, badgeW, badgeH, 18);
+  ctx.fillStyle = bg;
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.textAlign = "center";
+  ctx.fillText(rankLabel, badgeX + badgeW / 2, badgeY + badgeH / 2 + 21);
+  ctx.restore();
+  ctx.save();
+  ctx.font = "800 44px " + OUTFIT;
+  var scoreLabel = opts.score.toFixed(1);
+  var pillW = Math.max(128, ctx.measureText(scoreLabel).width + 56);
+  var pillH = 76;
+  var pillX = L.heroX + L.heroW + 26 - pillW;
+  var pillY = L.heroY + L.heroH - pillH / 2 - 10;
+  ctx.shadowColor = "rgba(0,0,0,0.55)";
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 8;
+  roundRectPath(ctx, pillX, pillY, pillW, pillH, pillH / 2);
+  ctx.fillStyle = theme.surface2;
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.strokeStyle = "rgba(255,255,255,0.14)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = shareScoreColor(opts.score);
+  ctx.textAlign = "center";
+  ctx.fillText(scoreLabel, pillX + pillW / 2, pillY + pillH / 2 + 16);
+  ctx.restore();
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.font = "800 " + L.footerSize + "px " + OUTFIT;
+  ctx.fillStyle = theme.accent;
+  drawTracked(ctx, "movirank.com", L.w / 2, L.footerY, 2, "center");
+  ctx.font = "400 " + L.taglineSize + "px " + DMSANS;
+  ctx.fillStyle = SHARE_MUTED;
+  ctx.fillText(opts.isTV ? SHARE_TAGLINE_TV : SHARE_TAGLINE, L.w / 2, L.footerY + L.taglineGap);
+  ctx.restore();
+  return canvas;
+}
+function shareProfileLink(item, user, isPrivate) {
+  if (user && !isPrivate) {
+    return SHARE_SITE_URL + "/?u=" + user.uid + (item.isTV ? "&type=tv" : "");
+  }
+  return SHARE_SITE_URL;
+}
+function buildShareCaption(item, user, isPrivate) {
+  var kind = item.isTV ? "show" : "movie";
+  var name = user && user.displayName ? user.displayName.trim().split(/\s+/)[0] : "";
+  var who = name ? name + "'s" : "my";
+  var link = shareProfileLink(item, user, isPrivate);
+  var tags = item.isTV ? "#movirank #tvshows #ranking" : "#movirank #letterboxd #filmtwitter";
+  var year = item.movie.year ? " (" + item.movie.year + ")" : "";
+  var head = item.movie.title + year + " just landed at #" + item.rank + " of " + item.total + " in " + who + " " + kind + " ranking \u2014 " + item.score.toFixed(1) + "/10.";
+  var body = head + "\n\nRank yours: " + link;
+  var billed = body.length - link.length + 23 + tags.length + 2;
+  return billed <= 280 ? body + "\n\n" + tags : body;
 }
 function splitCsvLine(line) {
   const out = [];
@@ -1046,7 +1554,7 @@ function ComparisonView({ session, onChoice, onCancel, onWatchlist, onSkip, item
     "\u{1F3B2} Can't Decide"
   ), /* @__PURE__ */ React.createElement("button", { className: "comparison-cancel", onClick: onCancel, style: { marginTop: 0 } }, "Cancel"))));
 }
-function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate, onImport, onUndoImport }) {
+function RankedList({ list, onRemove, onClear, onShare, onShareCard, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate, onImport, onUndoImport }) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmUndo, setConfirmUndo] = useState(false);
   const [genreFilter, setGenreFilter] = useState(null);
@@ -1210,7 +1718,7 @@ function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, 
   if (total === 0 && readOnly) {
     return /* @__PURE__ */ React.createElement("div", { className: "ranked-section" }, /* @__PURE__ */ React.createElement("div", { className: "ranked-empty" }, /* @__PURE__ */ React.createElement("p", null, itemLabel === "TV show" ? "\u{1F4FA}" : "\u{1F3AC}"), /* @__PURE__ */ React.createElement("p", null, "No ", itemLabel || "movie", "s ranked yet.")));
   }
-  return /* @__PURE__ */ React.createElement("div", { className: "ranked-section" }, /* @__PURE__ */ React.createElement("div", { className: "ranked-header" }, /* @__PURE__ */ React.createElement("h2", null, readOnly ? "Rankings" : "Your Rankings", " (", genreFilter ? `${filteredList.length} of ${total} \xB7 ${genreFilter}` : total, ")"), !readOnly && /* @__PURE__ */ React.createElement("div", { className: "ranked-header-btns" }, user && onTogglePrivate && /* @__PURE__ */ React.createElement("button", { className: `private-toggle ${isPrivate ? "active" : ""}`, onClick: onTogglePrivate }, isPrivate ? "\u{1F512}" : "\u{1F513}"), user && onImport && /* @__PURE__ */ React.createElement("button", { className: "share-btn", onClick: onImport }, /* @__PURE__ */ React.createElement("span", null, "\u{1F4E5}"), " Import"), user && onUndoImport && localStorage.getItem("movi-import-backup") && Date.now() - parseInt(localStorage.getItem("movi-import-backup-time") || "0") < 864e5 && /* @__PURE__ */ React.createElement("button", { className: "share-btn", onClick: () => setConfirmUndo(true), style: { background: "var(--surface2)" } }, /* @__PURE__ */ React.createElement("span", null, "\u21A9"), " Undo Import"), user && onShare && /* @__PURE__ */ React.createElement("button", { className: "share-btn", onClick: onShare }, /* @__PURE__ */ React.createElement("span", null, "\u{1F517}"), " Share"), /* @__PURE__ */ React.createElement("button", { className: "clear-btn", onClick: () => setConfirmClear(true) }, "Clear All"))), genres.length > 1 && /* @__PURE__ */ React.createElement("div", { className: "genre-pills" }, /* @__PURE__ */ React.createElement("button", { className: "genre-pill" + (!genreFilter ? " active" : ""), onClick: () => setGenreFilter(null) }, "All"), genres.map((g) => /* @__PURE__ */ React.createElement("button", { key: g, className: "genre-pill" + (genreFilter === g ? " active" : ""), onClick: () => setGenreFilter(genreFilter === g ? null : g) }, g))), /* @__PURE__ */ React.createElement("div", { className: "ranked-list" + (dragIndex !== null ? " is-dragging" : ""), ref: listRef }, displayList.map((movie, displayIdx) => {
+  return /* @__PURE__ */ React.createElement("div", { className: "ranked-section" }, /* @__PURE__ */ React.createElement("div", { className: "ranked-header" }, /* @__PURE__ */ React.createElement("h2", null, readOnly ? "Rankings" : "Your Rankings", " (", genreFilter ? `${filteredList.length} of ${total} \xB7 ${genreFilter}` : total, ")"), !readOnly && /* @__PURE__ */ React.createElement("div", { className: "ranked-header-btns" }, user && onTogglePrivate && /* @__PURE__ */ React.createElement("button", { className: `private-toggle ${isPrivate ? "active" : ""}`, onClick: onTogglePrivate }, isPrivate ? "\u{1F512}" : "\u{1F513}"), user && onImport && /* @__PURE__ */ React.createElement("button", { className: "share-btn", onClick: onImport }, /* @__PURE__ */ React.createElement("span", null, "\u{1F4E5}"), " Import"), user && onUndoImport && localStorage.getItem("movi-import-backup") && Date.now() - parseInt(localStorage.getItem("movi-import-backup-time") || "0") < 864e5 && /* @__PURE__ */ React.createElement("button", { className: "share-btn", onClick: () => setConfirmUndo(true), style: { background: "var(--surface2)" } }, /* @__PURE__ */ React.createElement("span", null, "\u21A9"), " Undo Import"), user && onShare && /* @__PURE__ */ React.createElement("button", { className: "share-btn", onClick: onShare }, /* @__PURE__ */ React.createElement("span", null, "\u{1F517}"), " Share"), onShareCard && list.length > 0 && /* @__PURE__ */ React.createElement("button", { className: "share-btn", onClick: () => onShareCard(list[0]) }, /* @__PURE__ */ React.createElement("span", null, "\u{1F4E3}"), " Card"), /* @__PURE__ */ React.createElement("button", { className: "clear-btn", onClick: () => setConfirmClear(true) }, "Clear All"))), genres.length > 1 && /* @__PURE__ */ React.createElement("div", { className: "genre-pills" }, /* @__PURE__ */ React.createElement("button", { className: "genre-pill" + (!genreFilter ? " active" : ""), onClick: () => setGenreFilter(null) }, "All"), genres.map((g) => /* @__PURE__ */ React.createElement("button", { key: g, className: "genre-pill" + (genreFilter === g ? " active" : ""), onClick: () => setGenreFilter(genreFilter === g ? null : g) }, g))), /* @__PURE__ */ React.createElement("div", { className: "ranked-list" + (dragIndex !== null ? " is-dragging" : ""), ref: listRef }, displayList.map((movie, displayIdx) => {
     var i = indexMap.has(movie.id) ? indexMap.get(movie.id) : list.indexOf(movie);
     const score = getScore(i, total);
     var itemClass = "ranked-item";
@@ -2639,11 +3147,187 @@ function StatsView({ rankedList, watchlist, isTV }) {
     width: Math.round(count / maxDecade * 100) + "%"
   } })), /* @__PURE__ */ React.createElement("div", { className: "stats-bar-count" }, count)))), insights.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("h4", { className: "stats-section-title" }, "Insights"), /* @__PURE__ */ React.createElement("div", { className: "stats-insights" }, insights.map((ins, i) => /* @__PURE__ */ React.createElement("div", { className: "stats-insight", key: i }, /* @__PURE__ */ React.createElement("span", { className: "stats-insight-icon" }, ins.icon), /* @__PURE__ */ React.createElement("span", null, ins.text))))));
 }
-function Toast({ message }) {
+function Toast({ message, actionLabel, onAction }) {
   if (!message) return null;
-  return /* @__PURE__ */ React.createElement("div", { className: "toast" }, message);
+  return /* @__PURE__ */ React.createElement("div", { className: "toast" }, /* @__PURE__ */ React.createElement("span", null, message), actionLabel && onAction && /* @__PURE__ */ React.createElement("button", { className: "toast-action", onClick: onAction }, actionLabel));
 }
-function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList, isTV }) {
+function ShareCard({ item, user, isPrivate, onClose, onToast, onMakePublic }) {
+  var [format, setFormat] = useState(function() {
+    try {
+      return localStorage.getItem("movi-share-format") === "story" ? "story" : "feed";
+    } catch (e) {
+      return "feed";
+    }
+  });
+  var [previewUrl, setPreviewUrl] = useState(null);
+  var [busy, setBusy] = useState(false);
+  var [error, setError] = useState(null);
+  var blobRef = useRef(null);
+  var canvasRef = useRef(null);
+  var canShareFiles = typeof navigator !== "undefined" && !!navigator.canShare && !!navigator.share;
+  var canCopyImage = typeof ClipboardItem !== "undefined" && typeof navigator !== "undefined" && !!navigator.clipboard && !!navigator.clipboard.write;
+  useEffect(function() {
+    function onKey(e) {
+      if (e.key === "Escape") onClose();
+    }
+    if (item) document.addEventListener("keydown", onKey);
+    return function() {
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [item, onClose]);
+  useEffect(function() {
+    try {
+      localStorage.setItem("movi-share-format", format);
+    } catch (e) {
+    }
+  }, [format]);
+  useEffect(function() {
+    if (!item) {
+      setPreviewUrl(null);
+      blobRef.current = null;
+      canvasRef.current = null;
+      return;
+    }
+    var cancelled = false;
+    var url = null;
+    setBusy(true);
+    setError(null);
+    renderShareCard({
+      movie: item.movie,
+      rank: item.rank,
+      total: item.total,
+      score: item.score,
+      isTV: item.isTV,
+      above: item.above,
+      below: item.below,
+      displayName: user ? user.displayName : null,
+      format
+    }).then(function(canvas) {
+      if (cancelled) return;
+      canvasRef.current = canvas;
+      return new Promise(function(res) {
+        canvas.toBlob(res, "image/jpeg", 0.92);
+      });
+    }).then(function(blob) {
+      if (cancelled) return;
+      if (!blob) {
+        setError("Couldn't build the card. Check your connection and try again.");
+        setBusy(false);
+        return;
+      }
+      blobRef.current = blob;
+      url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      setBusy(false);
+    }).catch(function(e) {
+      if (cancelled) return;
+      console.error("Share card render failed:", e);
+      setError("Couldn't build the card. Check your connection and try again.");
+      setBusy(false);
+    });
+    return function() {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [item, format, user]);
+  if (!item) return null;
+  var caption = buildShareCaption(item, user, isPrivate);
+  var fileName = "movirank-" + String(item.movie.title || "card").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) + "-" + item.rank + ".jpg";
+  function shareFile() {
+    if (!blobRef.current) return false;
+    var file = new File([blobRef.current], fileName, { type: "image/jpeg" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], text: caption }).catch(function() {
+      });
+      return true;
+    }
+    return false;
+  }
+  function downloadImage() {
+    if (!previewUrl) return;
+    var a = document.createElement("a");
+    if (!("download" in a)) {
+      window.open(previewUrl, "_blank");
+      return;
+    }
+    a.href = previewUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+  function copyCaption() {
+    if (!navigator.clipboard) {
+      onToast("Caption: " + caption);
+      return;
+    }
+    navigator.clipboard.writeText(caption).then(function() {
+      onToast("Caption copied!");
+    }).catch(function() {
+      onToast("Couldn't copy the caption.");
+    });
+  }
+  function handleInstagram() {
+    if (shareFile()) return;
+    downloadImage();
+    copyCaptionSilently();
+    onToast("Image saved & caption copied \u2014 post it from Instagram on your phone.", 5e3);
+  }
+  function copyCaptionSilently() {
+    if (navigator.clipboard) navigator.clipboard.writeText(caption).catch(function() {
+    });
+  }
+  function handleX() {
+    downloadImage();
+    copyCaptionSilently();
+    window.open("https://x.com/intent/post?text=" + encodeURIComponent(caption), "_blank", "noopener");
+    onToast("Image saved \u2014 attach it in the X composer.", 5e3);
+  }
+  function handleCopyImage() {
+    if (!canvasRef.current) return;
+    var png = new Promise(function(res) {
+      canvasRef.current.toBlob(res, "image/png");
+    });
+    navigator.clipboard.write([new ClipboardItem({ "image/png": png })]).then(function() {
+      onToast("Image copied to clipboard!");
+    }).catch(function() {
+      onToast("Couldn't copy the image \u2014 try Download.");
+    });
+  }
+  return /* @__PURE__ */ React.createElement("div", { className: "sharecard-overlay", onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "sharecard-modal", onClick: function(e) {
+    e.stopPropagation();
+  } }, /* @__PURE__ */ React.createElement("button", { className: "sharecard-close", onClick: onClose, "aria-label": "Close" }, "\xD7"), /* @__PURE__ */ React.createElement("h3", { className: "sharecard-title" }, "Share your ranking"), /* @__PURE__ */ React.createElement("div", { className: "sharecard-formats" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      className: "sharecard-pill" + (format === "feed" ? " active" : ""),
+      onClick: function() {
+        setFormat("feed");
+      }
+    },
+    "Feed 4:5"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      className: "sharecard-pill" + (format === "story" ? " active" : ""),
+      onClick: function() {
+        setFormat("story");
+      }
+    },
+    "Story 9:16"
+  )), /* @__PURE__ */ React.createElement("div", { className: "sharecard-preview" + (format === "story" ? " story" : "") }, error ? /* @__PURE__ */ React.createElement("div", { className: "sharecard-status" }, error) : previewUrl ? /* @__PURE__ */ React.createElement("img", { src: previewUrl, alt: item.movie.title + " ranked #" + item.rank }) : /* @__PURE__ */ React.createElement("div", { className: "sharecard-status" }, "Building your card\u2026")), user && isPrivate && /* @__PURE__ */ React.createElement("div", { className: "sharecard-note" }, "Your rankings are private, so the caption links to the homepage instead of your list.", onMakePublic && /* @__PURE__ */ React.createElement("button", { className: "sharecard-note-btn", onClick: onMakePublic }, "Make public")), !user && /* @__PURE__ */ React.createElement("div", { className: "sharecard-note" }, "Sign in to link followers straight to your own ranked list."), /* @__PURE__ */ React.createElement("div", { className: "sharecard-actions" }, canShareFiles && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      className: "sharecard-btn primary",
+      disabled: busy || !previewUrl,
+      onClick: function() {
+        if (!shareFile()) handleInstagram();
+      }
+    },
+    /* @__PURE__ */ React.createElement("span", null, "\u2934"),
+    " Share"
+  ), /* @__PURE__ */ React.createElement("button", { className: "sharecard-btn ig", disabled: busy || !previewUrl, onClick: handleInstagram }, /* @__PURE__ */ React.createElement("span", null, "\u{1F4F7}"), " ", canShareFiles ? "Instagram" : "Save for Instagram"), /* @__PURE__ */ React.createElement("button", { className: "sharecard-btn", disabled: busy || !previewUrl, onClick: handleX }, /* @__PURE__ */ React.createElement("span", null, "\u{1D54F}"), " Post on X"), /* @__PURE__ */ React.createElement("button", { className: "sharecard-btn", disabled: busy || !previewUrl, onClick: downloadImage }, /* @__PURE__ */ React.createElement("span", null, "\u2B07"), " Download"), canCopyImage && /* @__PURE__ */ React.createElement("button", { className: "sharecard-btn", disabled: busy || !previewUrl, onClick: handleCopyImage }, /* @__PURE__ */ React.createElement("span", null, "\u{1F5BC}"), " Copy image"), /* @__PURE__ */ React.createElement("button", { className: "sharecard-btn", onClick: copyCaption }, /* @__PURE__ */ React.createElement("span", null, "\u{1F4CB}"), " Copy caption")), /* @__PURE__ */ React.createElement("div", { className: "sharecard-caption" }, caption)));
+}
+function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList, isTV, onShareCard }) {
   var [tmdbDetail, setTmdbDetail] = useState(null);
   var [detailLoading, setDetailLoading] = useState(false);
   useEffect(function() {
@@ -2722,7 +3406,10 @@ function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList, isTV }) {
       className: movie.poster ? "" : "poster-placeholder",
       style: { width: "100%", aspectRatio: "2/3", objectFit: "cover", display: "block", borderRadius: 0 }
     }
-  ), /* @__PURE__ */ React.createElement("div", { className: "movie-detail-info" }, /* @__PURE__ */ React.createElement("div", { className: "movie-detail-title" }, movie.title), /* @__PURE__ */ React.createElement("div", { className: "movie-detail-year" }, movie.year, movie.genre ? ` \xB7 ${movie.genre}` : "", tmdbDetail && tmdbDetail.runtime ? ` \xB7 ${tmdbDetail.runtime}m` : "", tmdbDetail && tmdbDetail.seasons ? ` \xB7 ${tmdbDetail.seasons} season${tmdbDetail.seasons > 1 ? "s" : ""}` : ""), tmdbDetail && tmdbDetail.tmdbRating && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rating" }, /* @__PURE__ */ React.createElement("span", { className: "tmdb-star" }, "\u2605"), " ", tmdbDetail.tmdbRating.toFixed(1), "/10"), isRanked && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rank" }, "Ranked ", /* @__PURE__ */ React.createElement("strong", null, "#", rankIndex + 1), " of ", rankedList.length, " \xB7 ", /* @__PURE__ */ React.createElement("span", { className: scoreClass(score) }, /* @__PURE__ */ React.createElement("strong", null, score.toFixed(1)))), detailLoading && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-loading" }, "Loading details..."), tmdbDetail && tmdbDetail.overview && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-overview" }, tmdbDetail.overview), tmdbDetail && (tmdbDetail.director || tmdbDetail.cast.length > 0) && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta" }, tmdbDetail.director && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, isTV ? "Created by" : "Director"), tmdbDetail.director), tmdbDetail.cast.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, "Cast"), tmdbDetail.cast.join(", ")))), isRanked && onRerank && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-actions" }, /* @__PURE__ */ React.createElement("button", { className: "movie-detail-rerank", onClick: function() {
+  ), /* @__PURE__ */ React.createElement("div", { className: "movie-detail-info" }, /* @__PURE__ */ React.createElement("div", { className: "movie-detail-title" }, movie.title), /* @__PURE__ */ React.createElement("div", { className: "movie-detail-year" }, movie.year, movie.genre ? ` \xB7 ${movie.genre}` : "", tmdbDetail && tmdbDetail.runtime ? ` \xB7 ${tmdbDetail.runtime}m` : "", tmdbDetail && tmdbDetail.seasons ? ` \xB7 ${tmdbDetail.seasons} season${tmdbDetail.seasons > 1 ? "s" : ""}` : ""), tmdbDetail && tmdbDetail.tmdbRating && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rating" }, /* @__PURE__ */ React.createElement("span", { className: "tmdb-star" }, "\u2605"), " ", tmdbDetail.tmdbRating.toFixed(1), "/10"), isRanked && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rank" }, "Ranked ", /* @__PURE__ */ React.createElement("strong", null, "#", rankIndex + 1), " of ", rankedList.length, " \xB7 ", /* @__PURE__ */ React.createElement("span", { className: scoreClass(score) }, /* @__PURE__ */ React.createElement("strong", null, score.toFixed(1)))), detailLoading && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-loading" }, "Loading details..."), tmdbDetail && tmdbDetail.overview && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-overview" }, tmdbDetail.overview), tmdbDetail && (tmdbDetail.director || tmdbDetail.cast.length > 0) && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta" }, tmdbDetail.director && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, isTV ? "Created by" : "Director"), tmdbDetail.director), tmdbDetail.cast.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, "Cast"), tmdbDetail.cast.join(", ")))), isRanked && onRerank && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-actions" }, onShareCard && /* @__PURE__ */ React.createElement("button", { className: "movie-detail-sharecard", onClick: function() {
+    onShareCard(movie, isTV);
+    onClose();
+  } }, "Share card"), /* @__PURE__ */ React.createElement("button", { className: "movie-detail-rerank", onClick: function() {
     onRerank(movie);
     onClose();
   } }, "Re-rank"), /* @__PURE__ */ React.createElement("button", { className: "movie-detail-remove", onClick: function() {
@@ -2768,6 +3455,8 @@ function App() {
   const [session, setSession] = useState(null);
   const [tvSession, setTvSession] = useState(null);
   const [toast, setToast] = useState("");
+  const [justRanked, setJustRanked] = useState(null);
+  const [shareCard, setShareCard] = useState(null);
   const [detailMovie, setDetailMovie] = useState(null);
   const [showImport, setShowImport] = useState(false);
   const [user, setUser] = useState(null);
@@ -2982,10 +3671,44 @@ function App() {
     localStorage.setItem("movi-private", next ? "true" : "false");
     showToast(next ? "Rankings set to private" : "Rankings set to public");
   }
-  function showToast(msg) {
+  function showToast(msg, ms, share) {
     setToast(msg);
+    setJustRanked(share || null);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setToast(""), 2500);
+    toastTimerRef.current = setTimeout(() => {
+      setToast("");
+      setJustRanked(null);
+    }, ms || 2500);
+  }
+  function rankPayload(movie, list, index, useTV) {
+    const total = list.length;
+    return {
+      movie,
+      rank: index + 1,
+      total,
+      score: getScore(index, total),
+      isTV: useTV,
+      above: index > 0 ? list[index - 1] : null,
+      below: index < total - 1 ? list[index + 1] : null
+    };
+  }
+  function openShareCardFor(movie, useTV) {
+    const list = useTV ? tvRankedList : rankedList;
+    const idx = list.findIndex((m) => m.id === movie.id);
+    if (idx === -1) {
+      showToast("Rank it first to make a share card!");
+      return;
+    }
+    const total = list.length;
+    setShareCard({
+      movie: list[idx],
+      rank: idx + 1,
+      total,
+      score: getScore(idx, total),
+      isTV: useTV,
+      above: idx > 0 ? list[idx - 1] : null,
+      below: idx < total - 1 ? list[idx + 1] : null
+    });
   }
   async function handleSignIn() {
     if (!auth) return;
@@ -3146,7 +3869,7 @@ function App() {
       targetSetList([movie]);
       removeFromWatchlistById(movie.id, useTV);
       const score = getScore(0, 1);
-      showToast(`"${movie.title}" added as #1 (${score.toFixed(1)})!`);
+      showToast(`"${movie.title}" added as #1 (${score.toFixed(1)})!`, 5e3, rankPayload(movie, [movie], 0, useTV));
       return;
     }
     const s = createSession(movie, targetList);
@@ -3157,7 +3880,7 @@ function App() {
       targetSetList(newList);
       removeFromWatchlistById(movie.id, useTV);
       const score = getScore(s.insertIndex, newList.length);
-      showToast(`"${movie.title}" ranked #${s.insertIndex + 1} (${score.toFixed(1)})!`);
+      showToast(`"${movie.title}" ranked #${s.insertIndex + 1} (${score.toFixed(1)})!`, 5e3, rankPayload(movie, newList, s.insertIndex, useTV));
     } else {
       targetSetSession(s);
     }
@@ -3173,7 +3896,7 @@ function App() {
     targetSetList(filtered);
     if (filtered.length === 0) {
       targetSetList([movie]);
-      showToast('"' + movie.title + '" re-ranked as #1!');
+      showToast('"' + movie.title + '" re-ranked as #1!', 5e3, rankPayload(movie, [movie], 0, useTV));
       return;
     }
     var s = createSession(movie, filtered);
@@ -3184,7 +3907,7 @@ function App() {
       newList.splice(s.insertIndex, 0, movie);
       targetSetList(newList);
       var score = getScore(s.insertIndex, newList.length);
-      showToast('"' + movie.title + '" re-ranked #' + (s.insertIndex + 1) + " (" + score.toFixed(1) + ")!");
+      showToast('"' + movie.title + '" re-ranked #' + (s.insertIndex + 1) + " (" + score.toFixed(1) + ")!", 5e3, rankPayload(movie, newList, s.insertIndex, useTV));
     } else {
       targetSetSession(s);
     }
@@ -3196,6 +3919,7 @@ function App() {
       setList(s._restoreList);
       showToast('"' + s.newMovie.title + '" kept at its original rank.');
     }
+    setJustRanked(null);
     setActiveSession(null);
   }
   function handleCantDecide() {
@@ -3218,7 +3942,7 @@ function App() {
       choiceSetList(newList);
       removeFromWatchlistById(next.newMovie.id, sessionIsTV);
       const score = getScore(next.insertIndex, newList.length);
-      showToast(`"${next.newMovie.title}" ranked #${next.insertIndex + 1} (${score.toFixed(1)})!`);
+      showToast(`"${next.newMovie.title}" ranked #${next.insertIndex + 1} (${score.toFixed(1)})!`, 5e3, rankPayload(next.newMovie, newList, next.insertIndex, sessionIsTV));
       choiceSetSession(null);
     } else {
       choiceSetSession(next);
@@ -3337,9 +4061,27 @@ function App() {
           onRerank: handleRerank,
           onRemove: handleRemove,
           rankedList: activeList,
-          isTV
+          isTV,
+          onShareCard: openShareCardFor
         }
-      ), /* @__PURE__ */ React.createElement(Toast, { message: toast }), /* @__PURE__ */ React.createElement("footer", { style: { textAlign: "center", padding: "40px 0 20px", opacity: 0.5 } }, /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-muted)", fontSize: "12px", marginBottom: "8px" } }, "a website by Axel Hufford \xB7 ", /* @__PURE__ */ React.createElement("a", { href: "https://axelhufford.com", target: "_blank", rel: "noopener noreferrer", style: { color: "var(--text-muted)" } }, "axelhufford.com")), /* @__PURE__ */ React.createElement("a", { href: "https://www.themoviedb.org", target: "_blank", rel: "noopener noreferrer", style: { display: "inline-flex", alignItems: "center", gap: "8px", color: "var(--text-muted)", textDecoration: "none", fontSize: "12px" } }, /* @__PURE__ */ React.createElement("img", { src: "https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg", alt: "TMDB", style: { height: "16px" } }), "Data provided by TMDB")));
+      ), /* @__PURE__ */ React.createElement(
+        ShareCard,
+        {
+          item: shareCard,
+          user,
+          isPrivate,
+          onClose: () => setShareCard(null),
+          onToast: showToast,
+          onMakePublic: isPrivate ? handleTogglePrivate : null
+        }
+      ), /* @__PURE__ */ React.createElement(
+        Toast,
+        {
+          message: toast,
+          actionLabel: justRanked ? "Share \u2197" : null,
+          onAction: () => setShareCard(justRanked)
+        }
+      ), /* @__PURE__ */ React.createElement("footer", { style: { textAlign: "center", padding: "40px 0 20px", opacity: 0.5 } }, /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-muted)", fontSize: "12px", marginBottom: "8px" } }, "a website by Axel Hufford \xB7 ", /* @__PURE__ */ React.createElement("a", { href: "https://axelhufford.com", target: "_blank", rel: "noopener noreferrer", style: { color: "var(--text-muted)" } }, "axelhufford.com")), /* @__PURE__ */ React.createElement("a", { href: "https://www.themoviedb.org", target: "_blank", rel: "noopener noreferrer", style: { display: "inline-flex", alignItems: "center", gap: "8px", color: "var(--text-muted)", textDecoration: "none", fontSize: "12px" } }, /* @__PURE__ */ React.createElement("img", { src: "https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg", alt: "TMDB", style: { height: "16px" } }), "Data provided by TMDB")));
     }
   }
   return /* @__PURE__ */ React.createElement("div", { className: `${isTV ? "tv-mode" : ""} ${dayMode ? "day-mode" : ""}` }, /* @__PURE__ */ React.createElement("button", { className: "theme-toggle", onClick: () => setDayMode((d) => !d), title: dayMode ? "Night mode" : "Day mode" }, dayMode ? "\u{1F319}" : "\u2600\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "header" }, /* @__PURE__ */ React.createElement("div", { className: "logo-strip", onClick: handleGoHome }, /* @__PURE__ */ React.createElement("div", { className: "logo-frame" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "3"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" })), /* @__PURE__ */ React.createElement("div", { className: "logo-frame active" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "1"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" })), /* @__PURE__ */ React.createElement("div", { className: "logo-frame" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "2"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" }))), /* @__PURE__ */ React.createElement("div", { className: "logo-wordmark" }, "MOVI"), /* @__PURE__ */ React.createElement("div", { className: "logo-tv-sub" }, "Television"), /* @__PURE__ */ React.createElement("p", null, "Every ", isTV ? "TV show" : "movie", " ranked, one matchup at a time.")), /* @__PURE__ */ React.createElement("div", { className: "mode-toggle" }, /* @__PURE__ */ React.createElement("button", { className: `mode-btn ${!isTV ? "active" : ""}`, onClick: () => setMode("movies") }, "\u{1F3AC} Movies"), /* @__PURE__ */ React.createElement("button", { className: `mode-btn ${isTV ? "active" : ""}`, onClick: () => setMode("tv") }, "\u{1F4FA} TV Shows")), /* @__PURE__ */ React.createElement(
@@ -3394,6 +4136,7 @@ function App() {
       onMove: handleMove,
       onShare: handleShare,
       user,
+      onShareCard: (m) => openShareCardFor(m, isTV),
       onMovieClick: setDetailMovie,
       isPrivate,
       onTogglePrivate: handleTogglePrivate,
@@ -3464,7 +4207,18 @@ function App() {
       onRerank: handleRerank,
       onRemove: handleRemove,
       rankedList: activeList,
-      isTV
+      isTV,
+      onShareCard: openShareCardFor
+    }
+  ), /* @__PURE__ */ React.createElement(
+    ShareCard,
+    {
+      item: shareCard,
+      user,
+      isPrivate,
+      onClose: () => setShareCard(null),
+      onToast: showToast,
+      onMakePublic: isPrivate ? handleTogglePrivate : null
     }
   ), showImport && /* @__PURE__ */ React.createElement(
     LetterboxdImport,
@@ -3473,7 +4227,14 @@ function App() {
       onClose: () => setShowImport(false),
       existingCount: rankedList.length
     }
-  ), /* @__PURE__ */ React.createElement(Toast, { message: toast }), /* @__PURE__ */ React.createElement("footer", { style: { textAlign: "center", padding: "40px 0 20px", opacity: 0.5 } }, /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-muted)", fontSize: "12px", marginBottom: "8px" } }, "a website by Axel Hufford \xB7 ", /* @__PURE__ */ React.createElement("a", { href: "https://axelhufford.com", target: "_blank", rel: "noopener noreferrer", style: { color: "var(--text-muted)" } }, "axelhufford.com")), /* @__PURE__ */ React.createElement("a", { href: "https://www.themoviedb.org", target: "_blank", rel: "noopener noreferrer", style: { display: "inline-flex", alignItems: "center", gap: "8px", color: "var(--text-muted)", textDecoration: "none", fontSize: "12px" } }, /* @__PURE__ */ React.createElement("img", { src: "https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg", alt: "TMDB", style: { height: "16px" } }), "Data provided by TMDB")));
+  ), /* @__PURE__ */ React.createElement(
+    Toast,
+    {
+      message: toast,
+      actionLabel: justRanked ? "Share \u2197" : null,
+      onAction: () => setShareCard(justRanked)
+    }
+  ), /* @__PURE__ */ React.createElement("footer", { style: { textAlign: "center", padding: "40px 0 20px", opacity: 0.5 } }, /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-muted)", fontSize: "12px", marginBottom: "8px" } }, "a website by Axel Hufford \xB7 ", /* @__PURE__ */ React.createElement("a", { href: "https://axelhufford.com", target: "_blank", rel: "noopener noreferrer", style: { color: "var(--text-muted)" } }, "axelhufford.com")), /* @__PURE__ */ React.createElement("a", { href: "https://www.themoviedb.org", target: "_blank", rel: "noopener noreferrer", style: { display: "inline-flex", alignItems: "center", gap: "8px", color: "var(--text-muted)", textDecoration: "none", fontSize: "12px" } }, /* @__PURE__ */ React.createElement("img", { src: "https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg", alt: "TMDB", style: { height: "16px" } }), "Data provided by TMDB")));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(App, null));
 //# sourceMappingURL=app.js.map

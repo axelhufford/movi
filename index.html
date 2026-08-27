@@ -1162,7 +1162,8 @@
     /* ─── v2 visual refresh ──────────────────────────────────────── */
 
     /* Module 1 — overlays: backdrop-blur + softer dim */
-    .comparison-overlay, .import-overlay, .movie-detail-overlay, .expanded-cat-overlay {
+    .comparison-overlay, .import-overlay, .movie-detail-overlay, .expanded-cat-overlay,
+    .sharecard-overlay {
       background: rgba(8,6,4,0.68);
       backdrop-filter: blur(14px) saturate(1.1);
       -webkit-backdrop-filter: blur(14px) saturate(1.1);
@@ -1170,7 +1171,8 @@
     .day-mode .comparison-overlay,
     .day-mode .import-overlay,
     .day-mode .movie-detail-overlay,
-    .day-mode .expanded-cat-overlay {
+    .day-mode .expanded-cat-overlay,
+    .day-mode .sharecard-overlay {
       background: rgba(30,20,10,0.38);
     }
 
@@ -1181,7 +1183,7 @@
     .nav-tabs, .stats-accordion, .signin-prompt {
       box-shadow: var(--shadow-md);
     }
-    .comparison-box, .movie-detail-box, .import-modal, .expanded-cat-modal {
+    .comparison-box, .movie-detail-box, .import-modal, .expanded-cat-modal, .sharecard-modal {
       box-shadow: var(--shadow-lg);
     }
     .community-card:hover, .trophy-card:hover, .ranked-item:hover, .watchlist-item:hover {
@@ -1485,6 +1487,106 @@
       .comparison-card.is-losing, .comparison-card.is-winning {
         animation-duration: 1ms !important;
       }
+    }
+
+    /* ─── Share Card ─────────────────────────────────────────────── */
+    .toast { display: flex; align-items: center; gap: 14px; }
+    .toast-action {
+      flex-shrink: 0; background: var(--accent-grad); color: #fff; border: none;
+      padding: 6px 14px; border-radius: 999px; cursor: pointer;
+      font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.8rem;
+    }
+    .toast-action:active { transform: scale(0.96); }
+
+    .sharecard-overlay {
+      position: fixed; inset: 0; z-index: 400;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px 16px; overflow-y: auto;
+      animation: fadeIn 0.2s ease;
+    }
+    .sharecard-modal {
+      position: relative; background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px; width: 100%; max-width: 560px;
+      max-height: calc(100vh - 48px); overflow-y: auto;
+    }
+    .sharecard-close {
+      position: absolute; top: 12px; right: 14px; background: none; border: none;
+      color: var(--text-muted); font-size: 1.6rem; line-height: 1; cursor: pointer; padding: 4px;
+    }
+    .sharecard-close:hover { color: var(--text); }
+    .sharecard-title {
+      font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 700;
+      margin: 0 0 14px; color: var(--text);
+    }
+    .sharecard-formats { display: flex; gap: 8px; margin-bottom: 16px; }
+    .sharecard-pill {
+      background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border);
+      padding: 7px 16px; border-radius: 999px; cursor: pointer;
+      font-family: 'DM Sans', sans-serif; font-size: 0.82rem; font-weight: 500;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .sharecard-pill.active {
+      background: var(--accent-soft); color: var(--accent-text); border-color: var(--border-accent);
+    }
+    .sharecard-preview {
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+      overflow: hidden; min-height: 320px; margin-bottom: 14px;
+    }
+    .sharecard-preview img { display: block; width: 100%; height: auto; max-height: 46vh; object-fit: contain; }
+    .sharecard-preview.story img { max-height: 52vh; width: auto; }
+    .sharecard-status {
+      padding: 60px 20px; text-align: center; color: var(--text-muted);
+      font-family: 'DM Sans', sans-serif; font-size: 0.85rem;
+    }
+    .sharecard-note {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 12px; margin-bottom: 14px; font-size: 0.78rem; line-height: 1.5;
+      color: var(--text-muted); font-family: 'DM Sans', sans-serif;
+    }
+    .sharecard-note-btn {
+      background: none; border: none; color: var(--accent-text); cursor: pointer;
+      font-family: inherit; font-size: inherit; font-weight: 700; padding: 0; margin-left: 6px;
+      text-decoration: underline;
+    }
+    .sharecard-actions {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px; margin-bottom: 14px;
+    }
+    .sharecard-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+      padding: 11px 14px; border-radius: 10px; cursor: pointer;
+      font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 0.86rem;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .sharecard-btn:hover:not(:disabled) { background: var(--surface); border-color: var(--border-strong); }
+    .sharecard-btn:active:not(:disabled) { transform: scale(0.98); }
+    .sharecard-btn:disabled { opacity: 0.45; cursor: default; }
+    .sharecard-btn.primary { background: var(--accent-grad); border-color: transparent; color: #fff; }
+    .sharecard-btn.primary:hover:not(:disabled) { background: var(--accent-grad-hover); }
+    .sharecard-btn.ig {
+      background: linear-gradient(135deg, #833AB4 0%, #E1306C 55%, #F77737 100%);
+      border-color: transparent; color: #fff;
+    }
+    .sharecard-btn.ig:hover:not(:disabled) { filter: brightness(1.08); }
+    .sharecard-caption {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px; font-family: 'DM Sans', sans-serif; font-size: 0.78rem;
+      color: var(--text-muted); line-height: 1.55; white-space: pre-wrap;
+    }
+    .movie-detail-sharecard {
+      flex: 1; background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border); padding: 12px; border-radius: 10px; cursor: pointer;
+      font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 0.9rem;
+    }
+    .movie-detail-sharecard:hover { background: var(--surface); border-color: var(--border-strong); }
+    @media (max-width: 600px) {
+      .sharecard-overlay { padding: 12px 8px; align-items: flex-start; }
+      .sharecard-modal { padding: 18px 14px; }
+      .sharecard-actions { grid-template-columns: repeat(2, 1fr); }
+      .sharecard-preview img { max-height: 40vh; }
+      .sharecard-preview.story img { max-height: 44vh; }
     }
   </style>
 </head>

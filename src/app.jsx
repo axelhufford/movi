@@ -18,6 +18,11 @@
     // ─── Process Movie Database ─────────────────────────────────
     const TMDB_IMG = "https://image.tmdb.org/t/p/w200";
     const TMDB_IMG_LG = "https://image.tmdb.org/t/p/w300";
+    // Share-card sizes are deliberately distinct from the ones <Poster> requests.
+    // Those are fetched without crossOrigin; reusing an identical URL could hit the
+    // non-CORS cache entry and taint the canvas at toBlob() time.
+    const TMDB_IMG_XL = "https://image.tmdb.org/t/p/w500";
+    const TMDB_IMG_MD = "https://image.tmdb.org/t/p/w342";
     const TMDB_API_KEY = (typeof TMDB_API_KEY_CONFIG !== "undefined" && TMDB_API_KEY_CONFIG)
       ? TMDB_API_KEY_CONFIG : "39a17d2f20e6ebc19af8eadbf015f5ab";
     const TMDB_SEARCH_URL = "https://api.themoviedb.org/3/search/movie";
@@ -99,6 +104,518 @@
       if (score >= 7) return "score-high";
       if (score >= 4) return "score-mid";
       return "score-low";
+    }
+
+    // ─── Share Card Canvas ──────────────────────────────────────
+    // Draws a shareable social image entirely with Canvas 2D. Deliberately
+    // reads from literal constants rather than CSS variables so the export is
+    // identical regardless of day-mode / viewport / device pixel ratio.
+    const SHARE_SITE_URL = "https://movirank.com";
+    const SHARE_TAGLINE = "Every movie ranked, one matchup at a time.";
+    const SHARE_TAGLINE_TV = "Every show ranked, one matchup at a time.";
+
+    const SHARE_THEMES = {
+      movie: { bg: "#0F0E0D", surface: "#1C1A18", surface2: "#262320", accent: "#FF4D4D", accentGlow: "rgba(255,77,77,0.22)", accentSoft: "rgba(255,77,77,0.07)" },
+      tv:    { bg: "#0D120F", surface: "#151C18", surface2: "#1E2722", accent: "#00875A", accentGlow: "rgba(0,135,90,0.24)", accentSoft: "rgba(0,135,90,0.09)" },
+    };
+    const SHARE_TEXT = "#F5F3EF";
+    const SHARE_MUTED = "#9A968E";
+    const OUTFIT = '"Outfit", "Helvetica Neue", Arial, sans-serif';
+    const DMSANS = '"DM Sans", "Helvetica Neue", Arial, sans-serif';
+
+    // Every coordinate lives here so both aspect ratios share one drawing pass.
+    const SHARE_LAYOUTS = {
+      feed: {
+        w: 1080, h: 1350, pad: 72,
+        logoY: 40, logoScale: 0.88, wordmarkY: 166, wordmarkSize: 52, wordmarkTrack: 15,
+        bylineY: 208, bylineSize: 24, bylineTrack: 4,
+        rowH: 126, posterW: 84, rowGap: 24,
+        aboveY: 232, heroY: 382, heroX: 305, heroW: 470, heroH: 705, belowY: 1124,
+        footerY: 1296, footerSize: 40, taglineSize: 22, taglineGap: 32,
+        heroTitleSizes: [54, 48, 42, 36],
+      },
+      // Kept clear of the Story UI: nothing above y=200 or below y=1760.
+      story: {
+        w: 1080, h: 1920, pad: 80,
+        logoY: 210, logoScale: 1.0, wordmarkY: 360, wordmarkSize: 60, wordmarkTrack: 17,
+        bylineY: 412, bylineSize: 27, bylineTrack: 4,
+        rowH: 150, posterW: 100, rowGap: 28,
+        aboveY: 452, heroY: 626, heroX: 270, heroW: 540, heroH: 810, belowY: 1490,
+        footerY: 1706, footerSize: 46, taglineSize: 25, taglineGap: 38,
+        heroTitleSizes: [60, 53, 46, 40],
+      },
+    };
+
+    function shareScoreColor(score) {
+      if (score >= 7) return "#4fb96a";
+      if (score >= 4) return "#f5c518";
+      return "#9A968E";
+    }
+
+    // Resolves to null (never rejects) so one dead poster degrades to a
+    // placeholder tile instead of failing the whole card.
+    function loadImageCORS(url) {
+      return new Promise(function(resolve) {
+        if (!url) { resolve(null); return; }
+        var settled = false;
+        var done = function(v) { if (!settled) { settled = true; resolve(v); } };
+        var img = new Image();
+        img.crossOrigin = "anonymous"; // must be set before src
+        img.onload = function() { done(img); };
+        img.onerror = function() { done(null); };
+        img.src = url;
+        setTimeout(function() { done(null); }, 6000);
+      });
+    }
+
+    // ctx.roundRect only landed in Safari 16.4 and this site runs as an iOS PWA.
+    function roundRectPath(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      if (typeof ctx.roundRect === "function") { ctx.roundRect(x, y, w, h, r); return; }
+      var rr = Math.min(r, w / 2, h / 2);
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y,     x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x,     y + h, rr);
+      ctx.arcTo(x,     y + h, x,     y,     rr);
+      ctx.arcTo(x,     y,     x + w, y,     rr);
+      ctx.closePath();
+    }
+
+    function drawImageCover(ctx, img, x, y, w, h, r) {
+      ctx.save();
+      roundRectPath(ctx, x, y, w, h, r);
+      ctx.clip();
+      var iw = img.naturalWidth || img.width;
+      var ih = img.naturalHeight || img.height;
+      var scale = Math.max(w / iw, h / ih);
+      var dw = iw * scale;
+      var dh = ih * scale;
+      ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+      ctx.restore();
+    }
+
+    function truncateToWidth(ctx, text, maxW) {
+      if (ctx.measureText(text).width <= maxW) return text;
+      var lo = 0, hi = text.length;
+      while (lo < hi) {
+        var mid = Math.ceil((lo + hi) / 2);
+        if (ctx.measureText(text.slice(0, mid) + "…").width <= maxW) lo = mid; else hi = mid - 1;
+      }
+      return text.slice(0, lo).replace(/\s+$/, "") + "…";
+    }
+
+    function wrapText(ctx, text, maxW, maxLines) {
+      var words = String(text == null ? "" : text).split(/\s+/).filter(Boolean);
+      var lines = [];
+      var cur = "";
+      var i = 0;
+      while (i < words.length && lines.length < maxLines) {
+        var trial = cur ? cur + " " + words[i] : words[i];
+        if (!cur || ctx.measureText(trial).width <= maxW) { cur = trial; i++; }
+        else { lines.push(cur); cur = ""; }
+      }
+      if (cur && lines.length < maxLines) { lines.push(cur); cur = ""; }
+      if (!lines.length) return [];
+      var last = lines.length - 1;
+      var leftover = (i < words.length) || cur;
+      lines[last] = truncateToWidth(ctx, leftover ? lines[last] + " " + (words[i] || "") : lines[last], maxW);
+      return lines;
+    }
+
+    // Picks the largest size that fits without ellipsizing; falls back to the
+    // smallest. Keeps "The Assassination of Jesse James…" readable.
+    function fitText(ctx, text, maxW, maxLines, sizes, weight, family) {
+      for (var i = 0; i < sizes.length; i++) {
+        ctx.font = weight + " " + sizes[i] + "px " + family;
+        var lines = wrapText(ctx, text, maxW, maxLines);
+        var clipped = lines.some(function(l) { return l.slice(-1) === "…"; });
+        if (!clipped) return { size: sizes[i], lines: lines };
+      }
+      var small = sizes[sizes.length - 1];
+      ctx.font = weight + " " + small + "px " + family;
+      return { size: small, lines: wrapText(ctx, text, maxW, maxLines) };
+    }
+
+    // Always drawn char-by-char: ctx.letterSpacing is Chrome 99+/Safari 17.4+
+    // and the tracked MOVI wordmark is the whole point of the branding.
+    function trackedWidth(ctx, text, tracking) {
+      var w = 0;
+      for (var i = 0; i < text.length; i++) w += ctx.measureText(text[i]).width + tracking;
+      return w - (text.length ? tracking : 0);
+    }
+
+    function drawTracked(ctx, text, cx, y, tracking, align) {
+      var total = trackedWidth(ctx, text, tracking);
+      var x = align === "left" ? cx : (align === "right" ? cx - total : cx - total / 2);
+      var prev = ctx.textAlign;
+      ctx.textAlign = "left";
+      for (var i = 0; i < text.length; i++) {
+        ctx.fillText(text[i], x, y);
+        x += ctx.measureText(text[i]).width + tracking;
+      }
+      ctx.textAlign = prev;
+      return total;
+    }
+
+    // Titles without artwork get a ghosted film frame rather than their own
+    // name — the title is already spelled out next to (or on top of) the tile.
+    function drawFilmGlyph(ctx, cx, cy, scale, color) {
+      ctx.save();
+      ctx.translate(cx - 31 * scale, cy - 41 * scale);
+      ctx.scale(scale, scale);
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 3;
+      roundRectPath(ctx, 0, 0, 62, 82, 4);
+      ctx.stroke();
+      roundRectPath(ctx, 24, 5, 14, 5, 1); ctx.fill();
+      roundRectPath(ctx, 24, 72, 14, 5, 1); ctx.fill();
+      ctx.restore();
+    }
+
+    function drawPosterPlaceholder(ctx, x, y, w, h, r, theme) {
+      ctx.save();
+      roundRectPath(ctx, x, y, w, h, r);
+      ctx.fillStyle = theme.surface2;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.10)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.clip();
+      drawFilmGlyph(ctx, x + w / 2, y + h * 0.42, Math.max(0.5, w / 190), "rgba(245,243,239,0.16)");
+      ctx.restore();
+    }
+
+    // Film-strip mark, geometry lifted from og-image.svg so the card matches
+    // the site header exactly. Natural bounds 198x82, drawn centered on cx.
+    function drawLogoStrip(ctx, cx, top, scale, theme) {
+      ctx.save();
+      ctx.translate(cx - (198 * scale) / 2, top);
+      ctx.scale(scale, scale);
+      ctx.textBaseline = "alphabetic";
+      ctx.textAlign = "center";
+
+      var idle = function(fx, label) {
+        roundRectPath(ctx, fx, 8, 62, 74, 3);
+        ctx.fillStyle = "rgba(255,255,255,0.025)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.13)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        roundRectPath(ctx, fx + 24, 12, 14, 4, 1); ctx.fill();
+        roundRectPath(ctx, fx + 24, 74, 14, 4, 1); ctx.fill();
+        ctx.font = "800 30px " + OUTFIT;
+        ctx.fillStyle = "rgba(255,255,255,0.16)";
+        ctx.fillText(label, fx + 31, 56);
+      };
+      idle(0, "3");
+      idle(136, "2");
+
+      ctx.save();
+      ctx.translate(93, 45); ctx.scale(1.1, 1.1); ctx.translate(-93, -45);
+      roundRectPath(ctx, 62, 0, 62, 82, 3);
+      ctx.fillStyle = theme.accentSoft;
+      ctx.fill();
+      ctx.strokeStyle = theme.accent;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = theme.accent;
+      ctx.globalAlpha = 0.28;
+      roundRectPath(ctx, 86, 4, 14, 4, 1); ctx.fill();
+      roundRectPath(ctx, 86, 74, 14, 4, 1); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.font = "800 30px " + OUTFIT;
+      ctx.fillText("1", 93, 53);
+      ctx.restore();
+
+      ctx.restore();
+    }
+
+    // A neighbour row: rank number, small poster, title, year - genre.
+    function drawNeighborRow(ctx, L, y, entry, rank, img, theme) {
+      var h = L.rowH;
+      var pw = L.posterW;
+      var px = L.pad + 96;
+      ctx.save();
+      ctx.globalAlpha = 0.62;
+
+      ctx.textBaseline = "alphabetic";
+      ctx.textAlign = "right";
+      ctx.font = "800 40px " + OUTFIT;
+      ctx.fillStyle = "rgba(245,243,239,0.45)";
+      ctx.fillText("#" + rank, L.pad + 78, y + h / 2 + 14);
+
+      if (img) drawImageCover(ctx, img, px, y, pw, h, 8);
+      else drawPosterPlaceholder(ctx, px, y, pw, h, 8, theme);
+
+      var tx = px + pw + L.rowGap;
+      var maxW = L.w - tx - L.pad;
+      ctx.textAlign = "left";
+      ctx.fillStyle = SHARE_TEXT;
+      var fitted = fitText(ctx, entry.title, maxW, 1, [36, 32, 28], "600", OUTFIT);
+      ctx.fillText(fitted.lines[0] || "", tx, y + h / 2 + 2);
+
+      ctx.font = "400 26px " + DMSANS;
+      ctx.fillStyle = SHARE_MUTED;
+      var meta = [entry.year, entry.genre].filter(Boolean).join("  ·  ");
+      ctx.fillText(truncateToWidth(ctx, meta, maxW), tx, y + h / 2 + 42);
+
+      ctx.restore();
+    }
+
+    // Stand-in when the ranked title has no neighbour above/below it.
+    function drawSentinelRow(ctx, L, y, label) {
+      var h = L.rowH;
+      var cy = y + h / 2;
+      ctx.save();
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+      ctx.font = "700 26px " + OUTFIT;
+      ctx.fillStyle = "rgba(245,243,239,0.34)";
+      var w = drawTracked(ctx, label, L.w / 2, cy, 4, "center");
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(L.pad, cy); ctx.lineTo(L.w / 2 - w / 2 - 28, cy);
+      ctx.moveTo(L.w / 2 + w / 2 + 28, cy); ctx.lineTo(L.w - L.pad, cy);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    /**
+     * Renders the share card and returns the canvas.
+     * opts: { movie, rank, total, score, isTV, above, below, displayName, format }
+     */
+    async function renderShareCard(opts) {
+      var L = SHARE_LAYOUTS[opts.format] || SHARE_LAYOUTS.feed;
+      var theme = opts.isTV ? SHARE_THEMES.tv : SHARE_THEMES.movie;
+      var kind = opts.isTV ? "TV" : "MOVIE";
+
+      // Google serves subsetted woff2 with display=swap, so load() has to be
+      // given the actual glyphs or fillText silently falls back to Helvetica.
+      var glyphs = (opts.movie.title || "") + (opts.movie.genre || "") + (opts.displayName || "");
+      try {
+        await Promise.all([
+          document.fonts.load('900 60px "Outfit"', "MOVI0123456789#"),
+          document.fonts.load('800 56px "Outfit"', glyphs + "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+          document.fonts.load('600 36px "Outfit"', glyphs),
+          document.fonts.load('400 28px "DM Sans"', glyphs + SHARE_TAGLINE + SHARE_TAGLINE_TV + SHARE_SITE_URL),
+        ]);
+        await document.fonts.ready;
+      } catch (e) { /* fall back to system fonts rather than block the card */ }
+
+      var loads = [
+        loadImageCORS(opts.movie.poster ? TMDB_IMG_XL + opts.movie.poster : null),
+        loadImageCORS(opts.above && opts.above.poster ? TMDB_IMG_MD + opts.above.poster : null),
+        loadImageCORS(opts.below && opts.below.poster ? TMDB_IMG_MD + opts.below.poster : null),
+      ];
+      var imgs = await Promise.all(loads);
+      var heroImg = imgs[0], aboveImg = imgs[1], belowImg = imgs[2];
+
+      var canvas = document.createElement("canvas");
+      canvas.width = L.w;
+      canvas.height = L.h;
+      var ctx = canvas.getContext("2d");
+      ctx.textBaseline = "alphabetic";
+
+      // 1. base
+      ctx.fillStyle = theme.bg;
+      ctx.fillRect(0, 0, L.w, L.h);
+
+      // 2. blurred poster backdrop (ctx.filter is unsupported in Safari < 17)
+      var canBlur = false;
+      try { ctx.filter = "blur(2px)"; canBlur = ctx.filter !== "none"; ctx.filter = "none"; } catch (e) {}
+      if (heroImg && canBlur) {
+        ctx.save();
+        ctx.filter = "blur(60px)";
+        ctx.globalAlpha = 0.22;
+        drawImageCover(ctx, heroImg, -80, -80, L.w + 160, L.h + 160, 0);
+        ctx.restore();
+        ctx.filter = "none";
+      }
+
+      // 3. accent glow behind the hero
+      var gx = L.heroX + L.heroW / 2;
+      var gy = L.heroY + L.heroH / 2;
+      var glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, L.w * 0.85);
+      glow.addColorStop(0, theme.accentGlow);
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, L.w, L.h);
+
+      // 4. 36px grid, same values as og-image.svg
+      ctx.strokeStyle = "rgba(255,255,255,0.018)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (var gxr = 0; gxr <= L.w; gxr += 36) { ctx.moveTo(gxr + 0.5, 0); ctx.lineTo(gxr + 0.5, L.h); }
+      for (var gyr = 0; gyr <= L.h; gyr += 36) { ctx.moveTo(0, gyr + 0.5); ctx.lineTo(L.w, gyr + 0.5); }
+      ctx.stroke();
+
+      // 5. bottom darkening so the footer stays legible over the backdrop
+      var fade = ctx.createLinearGradient(0, L.h - 320, 0, L.h);
+      fade.addColorStop(0, "rgba(0,0,0,0)");
+      fade.addColorStop(1, "rgba(0,0,0,0.72)");
+      ctx.fillStyle = fade;
+      ctx.fillRect(0, L.h - 320, L.w, 320);
+
+      // 6. header: film strip + wordmark
+      drawLogoStrip(ctx, L.w / 2, L.logoY, L.logoScale, theme);
+      ctx.font = "900 " + L.wordmarkSize + "px " + OUTFIT;
+      ctx.fillStyle = SHARE_TEXT;
+      drawTracked(ctx, "MOVI", L.w / 2, L.wordmarkY, L.wordmarkTrack, "center");
+
+      // byline
+      var who = (opts.displayName || "").trim();
+      var first = who ? who.split(/\s+/)[0].toUpperCase() : "";
+      var byline;
+      if (opts.total <= 1) byline = "MY FIRST RANKED " + kind;
+      else byline = (first ? first + "'S " : "MY ") + kind + " RANKING · " + opts.total + " RANKED";
+      ctx.font = "700 " + L.bylineSize + "px " + OUTFIT;
+      ctx.fillStyle = SHARE_MUTED;
+      drawTracked(ctx, byline, L.w / 2, L.bylineY, L.bylineTrack, "center");
+
+      // 7. above / hero / below
+      if (opts.above) drawNeighborRow(ctx, L, L.aboveY, opts.above, opts.rank - 1, aboveImg, theme);
+      else drawSentinelRow(ctx, L, L.aboveY, "▲  TOP OF MY LIST");
+
+      if (opts.below) drawNeighborRow(ctx, L, L.belowY, opts.below, opts.rank + 1, belowImg, theme);
+      else drawSentinelRow(ctx, L, L.belowY, "▼  BOTTOM OF MY LIST");
+
+      // hero poster
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.65)";
+      ctx.shadowBlur = 60;
+      ctx.shadowOffsetY = 18;
+      roundRectPath(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20);
+      ctx.fillStyle = theme.surface;
+      ctx.fill();
+      ctx.restore();
+
+      if (heroImg) drawImageCover(ctx, heroImg, L.heroX, L.heroY, L.heroW, L.heroH, 20);
+      else drawPosterPlaceholder(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20, theme);
+
+      // title scrim baked onto the poster keeps the above/hero/below sandwich tight
+      ctx.save();
+      roundRectPath(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20);
+      ctx.clip();
+      var scrimTop = L.heroY + L.heroH - 300;
+      var scrim = ctx.createLinearGradient(0, scrimTop, 0, L.heroY + L.heroH);
+      scrim.addColorStop(0, "rgba(0,0,0,0)");
+      scrim.addColorStop(0.55, "rgba(0,0,0,0.72)");
+      scrim.addColorStop(1, "rgba(0,0,0,0.94)");
+      ctx.fillStyle = scrim;
+      ctx.fillRect(L.heroX, scrimTop, L.heroW, 300);
+
+      var tx = L.heroX + 28;
+      var tMaxW = L.heroW - 56;
+      var metaBaseline = L.heroY + L.heroH - 40;
+      ctx.textAlign = "left";
+      ctx.font = "400 26px " + DMSANS;
+      ctx.fillStyle = "rgba(245,243,239,0.72)";
+      var meta = [opts.movie.year, opts.movie.genre].filter(Boolean).join("  ·  ");
+      ctx.fillText(truncateToWidth(ctx, meta, tMaxW), tx, metaBaseline);
+
+      var fitted = fitText(ctx, opts.movie.title, tMaxW, 2, L.heroTitleSizes, "800", OUTFIT);
+      ctx.fillStyle = "#FFFFFF";
+      var lh = fitted.size * 1.14;
+      var titleBottom = metaBaseline - 46;
+      for (var li = 0; li < fitted.lines.length; li++) {
+        var yy = titleBottom - (fitted.lines.length - 1 - li) * lh;
+        ctx.fillText(fitted.lines[li], tx, yy);
+      }
+      ctx.restore();
+
+      // accent border on top of the artwork
+      ctx.save();
+      roundRectPath(ctx, L.heroX + 1.5, L.heroY + 1.5, L.heroW - 3, L.heroH - 3, 19);
+      ctx.strokeStyle = theme.accent;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore();
+
+      // rank badge, overlapping the hero's top-left corner
+      ctx.save();
+      ctx.font = "900 58px " + OUTFIT;
+      var rankLabel = "#" + opts.rank;
+      var badgeW = Math.max(112, ctx.measureText(rankLabel).width + 48);
+      var badgeH = 92;
+      var badgeX = L.heroX - 30;
+      var badgeY = L.heroY - 34;
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur = 28;
+      ctx.shadowOffsetY = 8;
+      var bg = ctx.createLinearGradient(badgeX, badgeY, badgeX + badgeW, badgeY + badgeH);
+      bg.addColorStop(0, theme.accent);
+      bg.addColorStop(1, opts.isTV ? "#2DAF7C" : "#FF7A3D");
+      roundRectPath(ctx, badgeX, badgeY, badgeW, badgeH, 18);
+      ctx.fillStyle = bg;
+      ctx.fill();
+      ctx.shadowColor = "transparent";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.textAlign = "center";
+      ctx.fillText(rankLabel, badgeX + badgeW / 2, badgeY + badgeH / 2 + 21);
+      ctx.restore();
+
+      // score pill, overlapping the hero's bottom-right corner
+      ctx.save();
+      ctx.font = "800 44px " + OUTFIT;
+      var scoreLabel = opts.score.toFixed(1);
+      var pillW = Math.max(128, ctx.measureText(scoreLabel).width + 56);
+      var pillH = 76;
+      var pillX = L.heroX + L.heroW + 26 - pillW;
+      var pillY = L.heroY + L.heroH - pillH / 2 - 10;
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetY = 8;
+      roundRectPath(ctx, pillX, pillY, pillW, pillH, pillH / 2);
+      ctx.fillStyle = theme.surface2;
+      ctx.fill();
+      ctx.shadowColor = "transparent";
+      ctx.strokeStyle = "rgba(255,255,255,0.14)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = shareScoreColor(opts.score);
+      ctx.textAlign = "center";
+      ctx.fillText(scoreLabel, pillX + pillW / 2, pillY + pillH / 2 + 16);
+      ctx.restore();
+
+      // 8. footer branding — the whole reason the card exists
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.font = "800 " + L.footerSize + "px " + OUTFIT;
+      ctx.fillStyle = theme.accent;
+      drawTracked(ctx, "movirank.com", L.w / 2, L.footerY, 2, "center");
+      ctx.font = "400 " + L.taglineSize + "px " + DMSANS;
+      ctx.fillStyle = SHARE_MUTED;
+      ctx.fillText(opts.isTV ? SHARE_TAGLINE_TV : SHARE_TAGLINE, L.w / 2, L.footerY + L.taglineGap);
+      ctx.restore();
+
+      return canvas;
+    }
+
+    // A private profile link dead-ends on the lock screen, which is the worst
+    // possible landing for a follower, so fall back to the homepage.
+    function shareProfileLink(item, user, isPrivate) {
+      if (user && !isPrivate) {
+        return SHARE_SITE_URL + "/?u=" + user.uid + (item.isTV ? "&type=tv" : "");
+      }
+      return SHARE_SITE_URL;
+    }
+
+    function buildShareCaption(item, user, isPrivate) {
+      var kind = item.isTV ? "show" : "movie";
+      var name = user && user.displayName ? user.displayName.trim().split(/\s+/)[0] : "";
+      var who = name ? name + "'s" : "my";
+      var link = shareProfileLink(item, user, isPrivate);
+      var tags = item.isTV ? "#movirank #tvshows #ranking" : "#movirank #letterboxd #filmtwitter";
+      var year = item.movie.year ? " (" + item.movie.year + ")" : "";
+      var head = item.movie.title + year + " just landed at #" + item.rank + " of " + item.total +
+        " in " + who + " " + kind + " ranking — " + item.score.toFixed(1) + "/10.";
+      var body = head + "\n\nRank yours: " + link;
+      // X bills every URL at 23 chars regardless of length.
+      var billed = body.length - link.length + 23 + tags.length + 2;
+      return billed <= 280 ? body + "\n\n" + tags : body;
     }
 
     // ─── Letterboxd Import ──────────────────────────────────────
@@ -1141,7 +1658,7 @@
     }
 
     // ─── Ranked List (with optional read-only mode) ─────────────
-    function RankedList({ list, onRemove, onClear, onShare, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate, onImport, onUndoImport }) {
+    function RankedList({ list, onRemove, onClear, onShare, onShareCard, onMove, readOnly, user, onAddMovie, onBookmark, rankedIds, watchlistIds, itemLabel, onMovieClick, isPrivate, onTogglePrivate, onImport, onUndoImport }) {
       const [confirmClear, setConfirmClear] = useState(false);
       const [confirmUndo, setConfirmUndo] = useState(false);
       const [genreFilter, setGenreFilter] = useState(null);
@@ -1347,6 +1864,11 @@
                 {user && onShare && (
                   <button className="share-btn" onClick={onShare}>
                     <span>&#x1F517;</span> Share
+                  </button>
+                )}
+                {onShareCard && list.length > 0 && (
+                  <button className="share-btn" onClick={() => onShareCard(list[0])}>
+                    <span>&#x1F4E3;</span> Card
                   </button>
                 )}
                 <button className="clear-btn" onClick={() => setConfirmClear(true)}>Clear All</button>
@@ -2888,12 +3410,219 @@
     }
 
     // ─── Toast ──────────────────────────────────────────────────
-    function Toast({ message }) {
+    function Toast({ message, actionLabel, onAction }) {
       if (!message) return null;
-      return <div className="toast">{message}</div>;
+      return (
+        <div className="toast">
+          <span>{message}</span>
+          {actionLabel && onAction && (
+            <button className="toast-action" onClick={onAction}>{actionLabel}</button>
+          )}
+        </div>
+      );
     }
 
-    function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList, isTV }) {
+    // ─── Share Card ─────────────────────────────────────────────
+    // Renders the canvas card off-screen, then hands the resulting blob to the
+    // share sheet / clipboard / download. Pre-rendering on open is required,
+    // not an optimisation: navigator.share on iOS must be reached from the
+    // click handler without an intervening await.
+    function ShareCard({ item, user, isPrivate, onClose, onToast, onMakePublic }) {
+      var [format, setFormat] = useState(function() {
+        try { return localStorage.getItem("movi-share-format") === "story" ? "story" : "feed"; }
+        catch (e) { return "feed"; }
+      });
+      var [previewUrl, setPreviewUrl] = useState(null);
+      var [busy, setBusy] = useState(false);
+      var [error, setError] = useState(null);
+      var blobRef = useRef(null);
+      var canvasRef = useRef(null);
+
+      var canShareFiles = typeof navigator !== "undefined" && !!navigator.canShare && !!navigator.share;
+      var canCopyImage = typeof ClipboardItem !== "undefined" &&
+        typeof navigator !== "undefined" && !!navigator.clipboard && !!navigator.clipboard.write;
+
+      useEffect(function() {
+        function onKey(e) { if (e.key === "Escape") onClose(); }
+        if (item) document.addEventListener("keydown", onKey);
+        return function() { document.removeEventListener("keydown", onKey); };
+      }, [item, onClose]);
+
+      useEffect(function() {
+        try { localStorage.setItem("movi-share-format", format); } catch (e) {}
+      }, [format]);
+
+      useEffect(function() {
+        if (!item) { setPreviewUrl(null); blobRef.current = null; canvasRef.current = null; return; }
+        var cancelled = false;
+        var url = null;
+        setBusy(true);
+        setError(null);
+        renderShareCard({
+          movie: item.movie, rank: item.rank, total: item.total, score: item.score,
+          isTV: item.isTV, above: item.above, below: item.below,
+          displayName: user ? user.displayName : null, format: format,
+        }).then(function(canvas) {
+          if (cancelled) return;
+          canvasRef.current = canvas;
+          // A tainted canvas throws here, which the catch below turns into a
+          // visible message rather than a modal stuck on "Building...".
+          return new Promise(function(res) { canvas.toBlob(res, "image/jpeg", 0.92); });
+        }).then(function(blob) {
+          if (cancelled) return;
+          if (!blob) { setError("Couldn't build the card. Check your connection and try again."); setBusy(false); return; }
+          blobRef.current = blob;
+          url = URL.createObjectURL(blob);
+          setPreviewUrl(url);
+          setBusy(false);
+        }).catch(function(e) {
+          if (cancelled) return;
+          console.error("Share card render failed:", e);
+          setError("Couldn't build the card. Check your connection and try again.");
+          setBusy(false);
+        });
+        return function() {
+          cancelled = true;
+          if (url) URL.revokeObjectURL(url);
+        };
+      }, [item, format, user]);
+
+      if (!item) return null;
+
+      var caption = buildShareCaption(item, user, isPrivate);
+      var fileName = "movirank-" + String(item.movie.title || "card").toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) + "-" + item.rank + ".jpg";
+
+      function shareFile() {
+        if (!blobRef.current) return false;
+        var file = new File([blobRef.current], fileName, { type: "image/jpeg" });
+        // files + text only: passing url as well makes iOS drop the file for
+        // some share targets.
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], text: caption }).catch(function() {});
+          return true;
+        }
+        return false;
+      }
+
+      function downloadImage() {
+        if (!previewUrl) return;
+        var a = document.createElement("a");
+        if (!("download" in a)) { window.open(previewUrl, "_blank"); return; }
+        a.href = previewUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      function copyCaption() {
+        if (!navigator.clipboard) { onToast("Caption: " + caption); return; }
+        navigator.clipboard.writeText(caption)
+          .then(function() { onToast("Caption copied!"); })
+          .catch(function() { onToast("Couldn't copy the caption."); });
+      }
+
+      function handleInstagram() {
+        if (shareFile()) return;
+        downloadImage();
+        copyCaptionSilently();
+        onToast("Image saved & caption copied — post it from Instagram on your phone.", 5000);
+      }
+
+      function copyCaptionSilently() {
+        if (navigator.clipboard) navigator.clipboard.writeText(caption).catch(function() {});
+      }
+
+      function handleX() {
+        // Intents cannot attach media, so save the image first and let the user
+        // drag it into the composer.
+        downloadImage();
+        copyCaptionSilently();
+        window.open("https://x.com/intent/post?text=" + encodeURIComponent(caption), "_blank", "noopener");
+        onToast("Image saved — attach it in the X composer.", 5000);
+      }
+
+      function handleCopyImage() {
+        if (!canvasRef.current) return;
+        // The promise must be handed to ClipboardItem synchronously or Safari
+        // treats the write as detached from the user gesture.
+        var png = new Promise(function(res) { canvasRef.current.toBlob(res, "image/png"); });
+        navigator.clipboard.write([new ClipboardItem({ "image/png": png })])
+          .then(function() { onToast("Image copied to clipboard!"); })
+          .catch(function() { onToast("Couldn't copy the image — try Download."); });
+      }
+
+      return (
+        <div className="sharecard-overlay" onClick={onClose}>
+          <div className="sharecard-modal" onClick={function(e) { e.stopPropagation(); }}>
+            <button className="sharecard-close" onClick={onClose} aria-label="Close">&times;</button>
+            <h3 className="sharecard-title">Share your ranking</h3>
+
+            <div className="sharecard-formats">
+              <button className={"sharecard-pill" + (format === "feed" ? " active" : "")}
+                onClick={function() { setFormat("feed"); }}>Feed 4:5</button>
+              <button className={"sharecard-pill" + (format === "story" ? " active" : "")}
+                onClick={function() { setFormat("story"); }}>Story 9:16</button>
+            </div>
+
+            <div className={"sharecard-preview" + (format === "story" ? " story" : "")}>
+              {error ? (
+                <div className="sharecard-status">{error}</div>
+              ) : previewUrl ? (
+                <img src={previewUrl} alt={item.movie.title + " ranked #" + item.rank} />
+              ) : (
+                <div className="sharecard-status">Building your card&hellip;</div>
+              )}
+            </div>
+
+            {user && isPrivate && (
+              <div className="sharecard-note">
+                Your rankings are private, so the caption links to the homepage instead of your list.
+                {onMakePublic && (
+                  <button className="sharecard-note-btn" onClick={onMakePublic}>Make public</button>
+                )}
+              </div>
+            )}
+            {!user && (
+              <div className="sharecard-note">
+                Sign in to link followers straight to your own ranked list.
+              </div>
+            )}
+
+            <div className="sharecard-actions">
+              {canShareFiles && (
+                <button className="sharecard-btn primary" disabled={busy || !previewUrl}
+                  onClick={function() { if (!shareFile()) handleInstagram(); }}>
+                  <span>&#x2934;</span> Share
+                </button>
+              )}
+              <button className="sharecard-btn ig" disabled={busy || !previewUrl} onClick={handleInstagram}>
+                <span>&#x1F4F7;</span> {canShareFiles ? "Instagram" : "Save for Instagram"}
+              </button>
+              <button className="sharecard-btn" disabled={busy || !previewUrl} onClick={handleX}>
+                <span>&#x1D54F;</span> Post on X
+              </button>
+              <button className="sharecard-btn" disabled={busy || !previewUrl} onClick={downloadImage}>
+                <span>&#x2B07;</span> Download
+              </button>
+              {canCopyImage && (
+                <button className="sharecard-btn" disabled={busy || !previewUrl} onClick={handleCopyImage}>
+                  <span>&#x1F5BC;</span> Copy image
+                </button>
+              )}
+              <button className="sharecard-btn" onClick={copyCaption}>
+                <span>&#x1F4CB;</span> Copy caption
+              </button>
+            </div>
+
+            <div className="sharecard-caption">{caption}</div>
+          </div>
+        </div>
+      );
+    }
+
+    function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList, isTV, onShareCard }) {
       var [tmdbDetail, setTmdbDetail] = useState(null);
       var [detailLoading, setDetailLoading] = useState(false);
 
@@ -2998,6 +3727,11 @@
             </div>
             {isRanked && onRerank && (
               <div className="movie-detail-actions">
+                {onShareCard && (
+                  <button className="movie-detail-sharecard" onClick={function() { onShareCard(movie, isTV); onClose(); }}>
+                    Share card
+                  </button>
+                )}
                 <button className="movie-detail-rerank" onClick={function() { onRerank(movie); onClose(); }}>
                   Re-rank
                 </button>
@@ -3034,6 +3768,10 @@
       const [session, setSession] = useState(null);
       const [tvSession, setTvSession] = useState(null);
       const [toast, setToast] = useState("");
+      // The ranking that just completed, offered via the toast action pill.
+      const [justRanked, setJustRanked] = useState(null);
+      // Non-null while the share modal is open; same shape as justRanked.
+      const [shareCard, setShareCard] = useState(null);
       const [detailMovie, setDetailMovie] = useState(null);
       const [showImport, setShowImport] = useState(false);
       const [user, setUser] = useState(null);
@@ -3275,10 +4013,37 @@
         showToast(next ? "Rankings set to private" : "Rankings set to public");
       }
 
-      function showToast(msg) {
+      // The share offer lives and dies with its toast: any later toast clears
+      // it, so an unrelated message can never resurrect a stale "Share" pill.
+      function showToast(msg, ms, share) {
         setToast(msg);
+        setJustRanked(share || null);
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = setTimeout(() => setToast(""), 2500);
+        toastTimerRef.current = setTimeout(() => { setToast(""); setJustRanked(null); }, ms || 2500);
+      }
+
+      // `list` must be the post-splice array and `index` the insert index —
+      // scores are positional, so they only settle once the item is in place.
+      function rankPayload(movie, list, index, useTV) {
+        const total = list.length;
+        return {
+          movie, rank: index + 1, total, score: getScore(index, total), isTV: useTV,
+          above: index > 0 ? list[index - 1] : null,
+          below: index < total - 1 ? list[index + 1] : null,
+        };
+      }
+
+      // Builds the same payload for a title that was ranked earlier.
+      function openShareCardFor(movie, useTV) {
+        const list = useTV ? tvRankedList : rankedList;
+        const idx = list.findIndex(m => m.id === movie.id);
+        if (idx === -1) { showToast("Rank it first to make a share card!"); return; }
+        const total = list.length;
+        setShareCard({
+          movie: list[idx], rank: idx + 1, total, score: getScore(idx, total), isTV: useTV,
+          above: idx > 0 ? list[idx - 1] : null,
+          below: idx < total - 1 ? list[idx + 1] : null,
+        });
       }
 
       async function handleSignIn() {
@@ -3466,7 +4231,7 @@
           targetSetList([movie]);
           removeFromWatchlistById(movie.id, useTV);
           const score = getScore(0, 1);
-          showToast(`"${movie.title}" added as #1 (${score.toFixed(1)})!`);
+          showToast(`"${movie.title}" added as #1 (${score.toFixed(1)})!`, 5000, rankPayload(movie, [movie], 0, useTV));
           return;
         }
         const s = createSession(movie, targetList);
@@ -3478,7 +4243,7 @@
           targetSetList(newList);
           removeFromWatchlistById(movie.id, useTV);
           const score = getScore(s.insertIndex, newList.length);
-          showToast(`"${movie.title}" ranked #${s.insertIndex + 1} (${score.toFixed(1)})!`);
+          showToast(`"${movie.title}" ranked #${s.insertIndex + 1} (${score.toFixed(1)})!`, 5000, rankPayload(movie, newList, s.insertIndex, useTV));
         } else {
           targetSetSession(s);
         }
@@ -3497,7 +4262,7 @@
 
         if (filtered.length === 0) {
           targetSetList([movie]);
-          showToast("\"" + movie.title + "\" re-ranked as #1!");
+          showToast("\"" + movie.title + "\" re-ranked as #1!", 5000, rankPayload(movie, [movie], 0, useTV));
           return;
         }
 
@@ -3511,7 +4276,7 @@
           newList.splice(s.insertIndex, 0, movie);
           targetSetList(newList);
           var score = getScore(s.insertIndex, newList.length);
-          showToast("\"" + movie.title + "\" re-ranked #" + (s.insertIndex + 1) + " (" + score.toFixed(1) + ")!");
+          showToast("\"" + movie.title + "\" re-ranked #" + (s.insertIndex + 1) + " (" + score.toFixed(1) + ")!", 5000, rankPayload(movie, newList, s.insertIndex, useTV));
         } else {
           targetSetSession(s);
         }
@@ -3525,6 +4290,7 @@
           setList(s._restoreList);
           showToast("\"" + s.newMovie.title + "\" kept at its original rank.");
         }
+        setJustRanked(null);
         setActiveSession(null);
       }
 
@@ -3551,7 +4317,7 @@
           choiceSetList(newList);
           removeFromWatchlistById(next.newMovie.id, sessionIsTV);
           const score = getScore(next.insertIndex, newList.length);
-          showToast(`"${next.newMovie.title}" ranked #${next.insertIndex + 1} (${score.toFixed(1)})!`);
+          showToast(`"${next.newMovie.title}" ranked #${next.insertIndex + 1} (${score.toFixed(1)})!`, 5000, rankPayload(next.newMovie, newList, next.insertIndex, sessionIsTV));
           choiceSetSession(null);
         } else {
           choiceSetSession(next);
@@ -3648,8 +4414,14 @@
                 onSkip={handleCantDecide}
                 itemLabel={isTV ? "TV show" : "movie"} />
               <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)}
-                onRerank={handleRerank} onRemove={handleRemove} rankedList={activeList} isTV={isTV} />
-              <Toast message={toast} />
+                onRerank={handleRerank} onRemove={handleRemove} rankedList={activeList} isTV={isTV}
+                onShareCard={openShareCardFor} />
+              <ShareCard item={shareCard} user={user} isPrivate={isPrivate}
+                onClose={() => setShareCard(null)} onToast={showToast}
+                onMakePublic={isPrivate ? handleTogglePrivate : null} />
+              <Toast message={toast}
+                actionLabel={justRanked ? "Share \u2197" : null}
+                onAction={() => setShareCard(justRanked)} />
               <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
                 <div style={{color:"var(--text-muted)",fontSize:"12px",marginBottom:"8px"}}>a website by Axel Hufford &middot; <a href="https://axelhufford.com" target="_blank" rel="noopener noreferrer" style={{color:"var(--text-muted)"}}>axelhufford.com</a></div>
                 <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:"8px",color:"var(--text-muted)",textDecoration:"none",fontSize:"12px"}}>
@@ -3735,6 +4507,7 @@
                 localDb={isTV ? TV_DB : MOVIE_DB} mode={mode} />
               <RankedList list={activeList} onRemove={handleRemove} onClear={handleClear}
                 onMove={handleMove} onShare={handleShare} user={user}
+                onShareCard={(m) => openShareCardFor(m, isTV)}
                 onMovieClick={setDetailMovie}
                 isPrivate={isPrivate} onTogglePrivate={handleTogglePrivate}
                 onImport={!isTV ? () => setShowImport(true) : undefined}
@@ -3807,14 +4580,20 @@
             onSkip={handleCantDecide}
             itemLabel={isTV ? "TV show" : "movie"} />
           <MovieDetail movie={detailMovie} onClose={() => setDetailMovie(null)}
-            onRerank={handleRerank} onRemove={handleRemove} rankedList={activeList} isTV={isTV} />
+            onRerank={handleRerank} onRemove={handleRemove} rankedList={activeList} isTV={isTV}
+            onShareCard={openShareCardFor} />
+          <ShareCard item={shareCard} user={user} isPrivate={isPrivate}
+            onClose={() => setShareCard(null)} onToast={showToast}
+            onMakePublic={isPrivate ? handleTogglePrivate : null} />
           {showImport && (
             <LetterboxdImport
               onImport={handleLetterboxdImport}
               onClose={() => setShowImport(false)}
               existingCount={rankedList.length} />
           )}
-          <Toast message={toast} />
+          <Toast message={toast}
+            actionLabel={justRanked ? "Share \u2197" : null}
+            onAction={() => setShareCard(justRanked)} />
           <footer style={{textAlign:"center",padding:"40px 0 20px",opacity:0.5}}>
             <div style={{color:"var(--text-muted)",fontSize:"12px",marginBottom:"8px"}}>a website by Axel Hufford &middot; <a href="https://axelhufford.com" target="_blank" rel="noopener noreferrer" style={{color:"var(--text-muted)"}}>axelhufford.com</a></div>
             <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:"8px",color:"var(--text-muted)",textDecoration:"none",fontSize:"12px"}}>
