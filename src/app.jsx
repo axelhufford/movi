@@ -2139,7 +2139,7 @@
       return months + "mo ago";
     }
 
-    function ActivityFeed() {
+    function ActivityFeed({ onMovieClick }) {
       const [events, setEvents] = useState([]);
       const [expanded, setExpanded] = useState(false);
       const [loading, setLoading] = useState(true);
@@ -2183,7 +2183,13 @@
           );
         }
 
-        return React.createElement("div", { key: ev._id, className: "activity-item" },
+        var clickable = ev.type === "ranked" && ev.movie && !!onMovieClick;
+        return React.createElement("div", {
+            key: ev._id,
+            className: "activity-item" + (clickable ? " clickable" : ""),
+            onClick: clickable ? function() { onMovieClick(ev.movie, !!ev.isTV); } : undefined,
+            title: clickable ? "See where you ranked " + ev.movie.title : undefined
+          },
           ev.photoURL
             ? React.createElement("img", { src: ev.photoURL, className: "activity-avatar", referrerPolicy: "no-referrer" })
             : React.createElement("div", { className: "activity-avatar-ph" }, (ev.displayName || "?")[0]),
@@ -2865,7 +2871,7 @@
       );
     }
 
-    function CommunityView({ onViewProfile, currentUid, currentDisplayName, currentPhotoURL, isAdmin, myMovies, myTv }) {
+    function CommunityView({ onViewProfile, currentUid, currentDisplayName, currentPhotoURL, isAdmin, myMovies, myTv, onMovieClick }) {
       const [profiles, setProfiles] = useState([]);
       const [me, setMe] = useState(null);
       const [trophies, setTrophies] = useState([]);
@@ -3029,7 +3035,7 @@
             </div>
           )}
           <TrophyShelf trophies={trophies} onViewProfile={onViewProfile} />
-          <ActivityFeed />
+          <ActivityFeed onMovieClick={onMovieClick} />
           {me && (
             <div className="community-you-block">
               <div className="community-section-label">Your Profile</div>
@@ -3714,9 +3720,12 @@
             <div className="movie-detail-info">
               <div className="movie-detail-title">{movie.title}</div>
               <div className="movie-detail-year">
-                {movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}
-                {tmdbDetail && tmdbDetail.runtime ? ` \u00b7 ${tmdbDetail.runtime}m` : ""}
-                {tmdbDetail && tmdbDetail.seasons ? ` \u00b7 ${tmdbDetail.seasons} season${tmdbDetail.seasons > 1 ? "s" : ""}` : ""}
+                {[
+                  movie.year,
+                  movie.genre,
+                  tmdbDetail && tmdbDetail.runtime ? `${tmdbDetail.runtime}m` : null,
+                  tmdbDetail && tmdbDetail.seasons ? `${tmdbDetail.seasons} season${tmdbDetail.seasons > 1 ? "s" : ""}` : null,
+                ].filter(Boolean).join(" \u00b7 ")}
               </div>
               {tmdbDetail && tmdbDetail.tmdbRating && (
                 <div className="movie-detail-rating">
@@ -4059,6 +4068,13 @@
         };
       }
 
+      function handleActivityMovieClick(evMovie, evIsTV) {
+        var list = evIsTV ? tvRankedList : rankedList;
+        var mine = list.find(function(m) { return m.id === evMovie.id; });
+        if (evIsTV !== isTV) setMode(evIsTV ? "tv" : "movies");
+        setDetailMovie(mine || evMovie);
+      }
+
       // Builds the same payload for a title that was ranked earlier.
       function openShareCardFor(movie, useTV) {
         const list = useTV ? tvRankedList : rankedList;
@@ -4283,20 +4299,24 @@
         const targetSetSession = useTV ? setTvSession : setSession;
 
         // Remove movie from the list
+        // Build the session against the list minus this title, but deliberately
+        // do NOT commit that removal to state. A transient shorter list gets
+        // picked up by the debounced profile save, and the later re-insert then
+        // looks like a brand new ranking to saveProfile's count comparison —
+        // which spammed the activity feed even when the user cancelled.
         const filtered = targetList.filter(function(m) { return m.id !== movie.id; });
-        targetSetList(filtered);
 
         if (filtered.length === 0) {
-          targetSetList([movie]);
-          showToast("\"" + movie.title + "\" re-ranked as #1!", 5000, rankPayload(movie, [movie], 0, useTV));
+          showToast("\"" + movie.title + "\" is your only ranked " + (useTV ? "show" : "movie") + ".");
           return;
         }
 
         // Start fresh binary search on the filtered list
         var s = createSession(movie, filtered);
         s._isTV = useTV;
-        // Snapshot the pre-removal list so Cancel can restore the original position
-        s._restoreList = targetList;
+        // The old copy is still in state, so completion has to drop it before
+        // inserting at the new index.
+        s._rerankId = movie.id;
         if (s.done) {
           var newList = filtered.slice();
           newList.splice(s.insertIndex, 0, movie);
@@ -4310,10 +4330,8 @@
 
       function handleCancelSession() {
         var s = activeSession;
-        if (s && s._restoreList) {
-          // Re-rank was in progress: put the movie back where it was
-          var setList = s._isTV ? setTvRankedList : setRankedList;
-          setList(s._restoreList);
+        // Nothing was ever removed, so cancelling a re-rank needs no restore.
+        if (s && s._rerankId != null) {
           showToast("\"" + s.newMovie.title + "\" kept at its original rank.");
         }
         setJustRanked(null);
@@ -4338,7 +4356,12 @@
         const next = recordChoice(activeSession, preferNew);
         next._isTV = sessionIsTV; // preserve type through comparisons
         if (next.done) {
-          const newList = [...choiceList];
+          // On a re-rank the old copy is still in the list; insertIndex is an
+          // index into the list without it.
+          const base = next._rerankId != null
+            ? choiceList.filter(function(m) { return m.id !== next._rerankId; })
+            : choiceList;
+          const newList = [...base];
           newList.splice(next.insertIndex, 0, next.newMovie);
           choiceSetList(newList);
           removeFromWatchlistById(next.newMovie.id, sessionIsTV);
@@ -4598,7 +4621,8 @@
               currentDisplayName={user ? user.displayName : null}
               currentPhotoURL={user ? user.photoURL : null}
               isAdmin={user && user.uid === ADMIN_UID}
-              myMovies={rankedList} myTv={tvRankedList} />
+              myMovies={rankedList} myTv={tvRankedList}
+              onMovieClick={handleActivityMovieClick} />
           )}
 
           <ComparisonView session={activeSession} onChoice={handleChoice} onCancel={handleCancelSession}

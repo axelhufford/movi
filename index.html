@@ -1489,6 +1489,14 @@
       }
     }
 
+    /* Hover bleeds past the row box so the highlight is not cramped against the text */
+    .activity-item.clickable {
+      cursor: pointer; border-radius: 10px; transition: background 0.15s ease;
+      padding-left: 8px; padding-right: 8px; margin-left: -8px; margin-right: -8px;
+    }
+    .activity-item.clickable:hover { background: var(--surface2); }
+    .activity-item.clickable:active { transform: scale(0.995); }
+
     /* ─── Share Card ─────────────────────────────────────────────── */
     .toast { display: flex; align-items: center; gap: 14px; }
     .toast-action {

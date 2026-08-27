@@ -1906,7 +1906,7 @@ function timeAgo(timestamp) {
   var months = Math.floor(days / 30);
   return months + "mo ago";
 }
-function ActivityFeed() {
+function ActivityFeed({ onMovieClick }) {
   const [events, setEvents] = useState([]);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1953,9 +1953,17 @@ function ActivityFeed() {
         " joined MOVI!"
       );
     }
+    var clickable = ev.type === "ranked" && ev.movie && !!onMovieClick;
     return React.createElement(
       "div",
-      { key: ev._id, className: "activity-item" },
+      {
+        key: ev._id,
+        className: "activity-item" + (clickable ? " clickable" : ""),
+        onClick: clickable ? function() {
+          onMovieClick(ev.movie, !!ev.isTV);
+        } : void 0,
+        title: clickable ? "See where you ranked " + ev.movie.title : void 0
+      },
       ev.photoURL ? React.createElement("img", { src: ev.photoURL, className: "activity-avatar", referrerPolicy: "no-referrer" }) : React.createElement("div", { className: "activity-avatar-ph" }, (ev.displayName || "?")[0]),
       React.createElement("div", { className: "activity-text" }, text),
       ev.type === "ranked" && ev.movie && ev.movie.poster ? React.createElement("img", { src: "https://image.tmdb.org/t/p/w92" + ev.movie.poster, className: "activity-poster" }) : null,
@@ -2773,7 +2781,7 @@ function TrophyShelf({ trophies, onViewProfile }) {
     )
   );
 }
-function CommunityView({ onViewProfile, currentUid, currentDisplayName, currentPhotoURL, isAdmin, myMovies, myTv }) {
+function CommunityView({ onViewProfile, currentUid, currentDisplayName, currentPhotoURL, isAdmin, myMovies, myTv, onMovieClick }) {
   const [profiles, setProfiles] = useState([]);
   const [me, setMe] = useState(null);
   const [trophies, setTrophies] = useState([]);
@@ -2888,7 +2896,7 @@ function CommunityView({ onViewProfile, currentUid, currentDisplayName, currentP
   if (profiles.length === 0 && !me) {
     return /* @__PURE__ */ React.createElement("div", { className: "community-section" }, /* @__PURE__ */ React.createElement("div", { className: "community-empty" }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: "2rem", marginBottom: 10 } }, "\u{1F465}"), /* @__PURE__ */ React.createElement("p", null, "No other users yet. Share your link with friends!")));
   }
-  return /* @__PURE__ */ React.createElement("div", { className: "community-section" }, showExplainer && /* @__PURE__ */ React.createElement("div", { className: "compat-explainer" }, /* @__PURE__ */ React.createElement("button", { className: "compat-explainer-close", onClick: () => setShowExplainer(false) }, "\xD7"), "Compatibility % is based on how many movies you have in common and how similarly you ranked them. Higher % = more similar taste!"), /* @__PURE__ */ React.createElement(TrophyShelf, { trophies, onViewProfile }), /* @__PURE__ */ React.createElement(ActivityFeed, null), me && /* @__PURE__ */ React.createElement("div", { className: "community-you-block" }, /* @__PURE__ */ React.createElement("div", { className: "community-section-label" }, "Your Profile"), renderCard(me, { isYou: true })), profiles.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, me && /* @__PURE__ */ React.createElement("div", { className: "community-section-label" }, "Community"), /* @__PURE__ */ React.createElement("div", { className: "community-list" }, profiles.map((p) => renderCard(p)))), badgeModal && /* @__PURE__ */ React.createElement("div", { className: "badge-modal-backdrop", onClick: () => setBadgeModal(null) }, /* @__PURE__ */ React.createElement("div", { className: "badge-modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("button", { className: "badge-modal-close", onClick: () => setBadgeModal(null) }, "\xD7"), /* @__PURE__ */ React.createElement("div", { className: "badge-modal-emoji" }, badgeModal.emoji), /* @__PURE__ */ React.createElement("div", { className: "badge-modal-label" }, badgeModal.label), /* @__PURE__ */ React.createElement("div", { className: "badge-modal-who" }, badgeModal.isYou ? "Your trophy" : badgeModal.ownerName + "'s trophy"), /* @__PURE__ */ React.createElement("div", { className: "badge-modal-tooltip" }, badgeModal.tooltip), /* @__PURE__ */ React.createElement("button", { className: "badge-modal-action", onClick: () => setBadgeModal(null) }, "Got it"))));
+  return /* @__PURE__ */ React.createElement("div", { className: "community-section" }, showExplainer && /* @__PURE__ */ React.createElement("div", { className: "compat-explainer" }, /* @__PURE__ */ React.createElement("button", { className: "compat-explainer-close", onClick: () => setShowExplainer(false) }, "\xD7"), "Compatibility % is based on how many movies you have in common and how similarly you ranked them. Higher % = more similar taste!"), /* @__PURE__ */ React.createElement(TrophyShelf, { trophies, onViewProfile }), /* @__PURE__ */ React.createElement(ActivityFeed, { onMovieClick }), me && /* @__PURE__ */ React.createElement("div", { className: "community-you-block" }, /* @__PURE__ */ React.createElement("div", { className: "community-section-label" }, "Your Profile"), renderCard(me, { isYou: true })), profiles.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, me && /* @__PURE__ */ React.createElement("div", { className: "community-section-label" }, "Community"), /* @__PURE__ */ React.createElement("div", { className: "community-list" }, profiles.map((p) => renderCard(p)))), badgeModal && /* @__PURE__ */ React.createElement("div", { className: "badge-modal-backdrop", onClick: () => setBadgeModal(null) }, /* @__PURE__ */ React.createElement("div", { className: "badge-modal", onClick: (e) => e.stopPropagation() }, /* @__PURE__ */ React.createElement("button", { className: "badge-modal-close", onClick: () => setBadgeModal(null) }, "\xD7"), /* @__PURE__ */ React.createElement("div", { className: "badge-modal-emoji" }, badgeModal.emoji), /* @__PURE__ */ React.createElement("div", { className: "badge-modal-label" }, badgeModal.label), /* @__PURE__ */ React.createElement("div", { className: "badge-modal-who" }, badgeModal.isYou ? "Your trophy" : badgeModal.ownerName + "'s trophy"), /* @__PURE__ */ React.createElement("div", { className: "badge-modal-tooltip" }, badgeModal.tooltip), /* @__PURE__ */ React.createElement("button", { className: "badge-modal-action", onClick: () => setBadgeModal(null) }, "Got it"))));
 }
 function ProfileView({ uid, onBack, onAddMovie, onBookmark, rankedIds, tvRankedIds, watchlistIds, tvWatchlistIds, defaultTab, isAdmin, onTabChange, onMovieClick }) {
   const [profile, setProfile] = useState(null);
@@ -3430,7 +3438,12 @@ function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList, isTV, onS
       className: movie.poster ? "" : "poster-placeholder",
       style: { width: "100%", aspectRatio: "2/3", objectFit: "cover", display: "block", borderRadius: 0 }
     }
-  ), /* @__PURE__ */ React.createElement("div", { className: "movie-detail-info" }, /* @__PURE__ */ React.createElement("div", { className: "movie-detail-title" }, movie.title), /* @__PURE__ */ React.createElement("div", { className: "movie-detail-year" }, movie.year, movie.genre ? ` \xB7 ${movie.genre}` : "", tmdbDetail && tmdbDetail.runtime ? ` \xB7 ${tmdbDetail.runtime}m` : "", tmdbDetail && tmdbDetail.seasons ? ` \xB7 ${tmdbDetail.seasons} season${tmdbDetail.seasons > 1 ? "s" : ""}` : ""), tmdbDetail && tmdbDetail.tmdbRating && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rating" }, /* @__PURE__ */ React.createElement("span", { className: "tmdb-star" }, "\u2605"), " ", tmdbDetail.tmdbRating.toFixed(1), "/10"), isRanked && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rank" }, "Ranked ", /* @__PURE__ */ React.createElement("strong", null, "#", rankIndex + 1), " of ", rankedList.length, " \xB7 ", /* @__PURE__ */ React.createElement("span", { className: scoreClass(score) }, /* @__PURE__ */ React.createElement("strong", null, score.toFixed(1)))), detailLoading && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-loading" }, "Loading details..."), tmdbDetail && tmdbDetail.overview && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-overview" }, tmdbDetail.overview), tmdbDetail && (tmdbDetail.director || tmdbDetail.cast.length > 0) && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta" }, tmdbDetail.director && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, isTV ? "Created by" : "Director"), tmdbDetail.director), tmdbDetail.cast.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, "Cast"), tmdbDetail.cast.join(", ")))), isRanked && onRerank && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-actions" }, onShareCard && /* @__PURE__ */ React.createElement("button", { className: "movie-detail-sharecard", onClick: function() {
+  ), /* @__PURE__ */ React.createElement("div", { className: "movie-detail-info" }, /* @__PURE__ */ React.createElement("div", { className: "movie-detail-title" }, movie.title), /* @__PURE__ */ React.createElement("div", { className: "movie-detail-year" }, [
+    movie.year,
+    movie.genre,
+    tmdbDetail && tmdbDetail.runtime ? `${tmdbDetail.runtime}m` : null,
+    tmdbDetail && tmdbDetail.seasons ? `${tmdbDetail.seasons} season${tmdbDetail.seasons > 1 ? "s" : ""}` : null
+  ].filter(Boolean).join(" \xB7 ")), tmdbDetail && tmdbDetail.tmdbRating && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rating" }, /* @__PURE__ */ React.createElement("span", { className: "tmdb-star" }, "\u2605"), " ", tmdbDetail.tmdbRating.toFixed(1), "/10"), isRanked && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rank" }, "Ranked ", /* @__PURE__ */ React.createElement("strong", null, "#", rankIndex + 1), " of ", rankedList.length, " \xB7 ", /* @__PURE__ */ React.createElement("span", { className: scoreClass(score) }, /* @__PURE__ */ React.createElement("strong", null, score.toFixed(1)))), detailLoading && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-loading" }, "Loading details..."), tmdbDetail && tmdbDetail.overview && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-overview" }, tmdbDetail.overview), tmdbDetail && (tmdbDetail.director || tmdbDetail.cast.length > 0) && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta" }, tmdbDetail.director && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, isTV ? "Created by" : "Director"), tmdbDetail.director), tmdbDetail.cast.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, "Cast"), tmdbDetail.cast.join(", ")))), isRanked && onRerank && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-actions" }, onShareCard && /* @__PURE__ */ React.createElement("button", { className: "movie-detail-sharecard", onClick: function() {
     onShareCard(movie, isTV);
     onClose();
   } }, "Share card"), /* @__PURE__ */ React.createElement("button", { className: "movie-detail-rerank", onClick: function() {
@@ -3716,6 +3729,14 @@ function App() {
       below: index < total - 1 ? list[index + 1] : null
     };
   }
+  function handleActivityMovieClick(evMovie, evIsTV) {
+    var list = evIsTV ? tvRankedList : rankedList;
+    var mine = list.find(function(m) {
+      return m.id === evMovie.id;
+    });
+    if (evIsTV !== isTV) setMode(evIsTV ? "tv" : "movies");
+    setDetailMovie(mine || evMovie);
+  }
   function openShareCardFor(movie, useTV) {
     const list = useTV ? tvRankedList : rankedList;
     const idx = list.findIndex((m) => m.id === movie.id);
@@ -3917,15 +3938,13 @@ function App() {
     const filtered = targetList.filter(function(m) {
       return m.id !== movie.id;
     });
-    targetSetList(filtered);
     if (filtered.length === 0) {
-      targetSetList([movie]);
-      showToast('"' + movie.title + '" re-ranked as #1!', 5e3, rankPayload(movie, [movie], 0, useTV));
+      showToast('"' + movie.title + '" is your only ranked ' + (useTV ? "show" : "movie") + ".");
       return;
     }
     var s = createSession(movie, filtered);
     s._isTV = useTV;
-    s._restoreList = targetList;
+    s._rerankId = movie.id;
     if (s.done) {
       var newList = filtered.slice();
       newList.splice(s.insertIndex, 0, movie);
@@ -3938,9 +3957,7 @@ function App() {
   }
   function handleCancelSession() {
     var s = activeSession;
-    if (s && s._restoreList) {
-      var setList = s._isTV ? setTvRankedList : setRankedList;
-      setList(s._restoreList);
+    if (s && s._rerankId != null) {
       showToast('"' + s.newMovie.title + '" kept at its original rank.');
     }
     setJustRanked(null);
@@ -3961,7 +3978,10 @@ function App() {
     const next = recordChoice(activeSession, preferNew);
     next._isTV = sessionIsTV;
     if (next.done) {
-      const newList = [...choiceList];
+      const base = next._rerankId != null ? choiceList.filter(function(m) {
+        return m.id !== next._rerankId;
+      }) : choiceList;
+      const newList = [...base];
       newList.splice(next.insertIndex, 0, next.newMovie);
       choiceSetList(newList);
       removeFromWatchlistById(next.newMovie.id, sessionIsTV);
@@ -4211,7 +4231,8 @@ function App() {
       currentPhotoURL: user ? user.photoURL : null,
       isAdmin: user && user.uid === ADMIN_UID,
       myMovies: rankedList,
-      myTv: tvRankedList
+      myTv: tvRankedList,
+      onMovieClick: handleActivityMovieClick
     }
   ), /* @__PURE__ */ React.createElement(
     ComparisonView,
