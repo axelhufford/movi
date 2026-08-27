@@ -3267,17 +3267,18 @@ function ShareCard({ item, user, isPrivate, onClose, onToast, onMakePublic }) {
       onToast("Couldn't copy the caption.");
     });
   }
+  function copyCaptionSilently() {
+    if (navigator.clipboard) navigator.clipboard.writeText(caption).catch(function() {
+    });
+  }
   function handleInstagram() {
     if (shareFile()) return;
     downloadImage();
     copyCaptionSilently();
     onToast("Image saved & caption copied \u2014 post it from Instagram on your phone.", 5e3);
   }
-  function copyCaptionSilently() {
-    if (navigator.clipboard) navigator.clipboard.writeText(caption).catch(function() {
-    });
-  }
   function handleX() {
+    if (shareFile()) return;
     downloadImage();
     copyCaptionSilently();
     window.open("https://x.com/intent/post?text=" + encodeURIComponent(caption), "_blank", "noopener");

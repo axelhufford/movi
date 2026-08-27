@@ -3523,6 +3523,10 @@
           .catch(function() { onToast("Couldn't copy the caption."); });
       }
 
+      function copyCaptionSilently() {
+        if (navigator.clipboard) navigator.clipboard.writeText(caption).catch(function() {});
+      }
+
       function handleInstagram() {
         if (shareFile()) return;
         downloadImage();
@@ -3530,13 +3534,12 @@
         onToast("Image saved & caption copied — post it from Instagram on your phone.", 5000);
       }
 
-      function copyCaptionSilently() {
-        if (navigator.clipboard) navigator.clipboard.writeText(caption).catch(function() {});
-      }
-
       function handleX() {
-        // Intents cannot attach media, so save the image first and let the user
-        // drag it into the composer.
+        // The share sheet is the only route that carries the image into the
+        // installed X app. The web intent opens a logged-out browser session
+        // instead of handing off, and twitter:// URLs cannot attach a file —
+        // so on mobile the sheet wins, and the intent is the desktop fallback.
+        if (shareFile()) return;
         downloadImage();
         copyCaptionSilently();
         window.open("https://x.com/intent/post?text=" + encodeURIComponent(caption), "_blank", "noopener");
