@@ -114,44 +114,54 @@
     const SHARE_TAGLINE = "Every movie ranked, one matchup at a time.";
     const SHARE_TAGLINE_TV = "Every show ranked, one matchup at a time.";
 
+    // Mirrors the Matinee tokens in index.html (light theme): paper, ink, one
+    // accent. TV frames get rounded corners, like the site header.
     const SHARE_THEMES = {
-      movie: { bg: "#0F0E0D", surface: "#1C1A18", surface2: "#262320", accent: "#FF4D4D", accentGlow: "rgba(255,77,77,0.22)", accentSoft: "rgba(255,77,77,0.07)" },
-      tv:    { bg: "#0D120F", surface: "#151C18", surface2: "#1E2722", accent: "#00875A", accentGlow: "rgba(0,135,90,0.24)", accentSoft: "rgba(0,135,90,0.09)" },
+      movie: {
+        bg: "#F5EFE4", surface: "#FFFBF3", surface2: "#EBE3D4",
+        text: "#1C1A17", muted: "#6A635A", faint: "#A0978A", ink: "28,26,23",
+        accent: "#C8361F", shadow: "rgba(60,40,20,0.38)", scoreHigh: "#2F6B45", frameRadius: 3,
+      },
+      tv: {
+        bg: "#EEF0E5", surface: "#F8F9F2", surface2: "#E2E6D8",
+        text: "#1A1D19", muted: "#5F665C", faint: "#9AA095", ink: "26,29,25",
+        // Ink, not green, so a high score doesn't read as the TV accent
+        accent: "#1F6B4E", shadow: "rgba(30,45,35,0.38)", scoreHigh: "#1A1D19", frameRadius: 10,
+      },
     };
-    const SHARE_TEXT = "#F5F3EF";
-    const SHARE_MUTED = "#9A968E";
-    const OUTFIT = '"Outfit", "Helvetica Neue", Arial, sans-serif';
-    const DMSANS = '"DM Sans", "Helvetica Neue", Arial, sans-serif';
+    const SHARE_SCORE_MID = "#8A6400";
+    const SERIF = '"Fraunces", Georgia, "Times New Roman", serif';
+    const SANS = '"Instrument Sans", "Helvetica Neue", Arial, sans-serif';
 
     // Every coordinate lives here so both aspect ratios share one drawing pass.
     const SHARE_LAYOUTS = {
       feed: {
         w: 1080, h: 1350, pad: 72,
-        logoY: 40, logoScale: 0.88, wordmarkY: 166, wordmarkSize: 52, wordmarkTrack: 15,
-        bylineY: 208, bylineSize: 24, bylineTrack: 4,
+        logoY: 40, logoScale: 0.88, wordmarkY: 178, wordmarkSize: 64, wordmarkTrack: -2,
+        bylineY: 214, bylineSize: 25,
         rowH: 126, posterW: 84, rowGap: 24,
         aboveY: 232, heroY: 382, heroX: 305, heroW: 470, heroH: 705, belowY: 1124,
-        footerY: 1296, footerSize: 40, taglineSize: 22, taglineGap: 32,
+        footerY: 1296, footerSize: 40, taglineSize: 24, taglineGap: 34,
         heroTitleSizes: [54, 48, 42, 36],
         rankSize: 44, rankBadgeH: 74, scoreSize: 76, scorePillH: 112,
       },
       // Kept clear of the Story UI: nothing above y=200 or below y=1760.
       story: {
         w: 1080, h: 1920, pad: 80,
-        logoY: 210, logoScale: 1.0, wordmarkY: 360, wordmarkSize: 60, wordmarkTrack: 17,
-        bylineY: 412, bylineSize: 27, bylineTrack: 4,
+        logoY: 210, logoScale: 1.0, wordmarkY: 372, wordmarkSize: 76, wordmarkTrack: -2.5,
+        bylineY: 416, bylineSize: 28,
         rowH: 150, posterW: 100, rowGap: 28,
         aboveY: 452, heroY: 626, heroX: 270, heroW: 540, heroH: 810, belowY: 1490,
-        footerY: 1706, footerSize: 46, taglineSize: 25, taglineGap: 38,
+        footerY: 1706, footerSize: 46, taglineSize: 27, taglineGap: 40,
         heroTitleSizes: [60, 53, 46, 40],
         rankSize: 50, rankBadgeH: 84, scoreSize: 86, scorePillH: 126,
       },
     };
 
-    function shareScoreRGB(score) {
-      if (score >= 7) return "79,185,106";
-      if (score >= 4) return "245,197,24";
-      return "154,150,142";
+    function shareScoreColor(score, theme) {
+      if (score >= 7) return theme.scoreHigh;
+      if (score >= 4) return SHARE_SCORE_MID;
+      return theme.muted;
     }
 
     // Resolves to null (never rejects) so one dead poster degrades to a
@@ -239,7 +249,7 @@
     }
 
     // Always drawn char-by-char: ctx.letterSpacing is Chrome 99+/Safari 17.4+
-    // and the tracked MOVI wordmark is the whole point of the branding.
+    // and the wordmark and small-caps labels depend on their tracking.
     function trackedWidth(ctx, text, tracking) {
       var w = 0;
       for (var i = 0; i < text.length; i++) w += ctx.measureText(text[i]).width + tracking;
@@ -280,16 +290,16 @@
       roundRectPath(ctx, x, y, w, h, r);
       ctx.fillStyle = theme.surface2;
       ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.10)";
+      ctx.strokeStyle = "rgba(" + theme.ink + ",0.12)";
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.clip();
-      drawFilmGlyph(ctx, x + w / 2, y + h * 0.42, Math.max(0.5, w / 190), "rgba(245,243,239,0.16)");
+      drawFilmGlyph(ctx, x + w / 2, y + h * 0.42, Math.max(0.5, w / 190), "rgba(" + theme.ink + ",0.18)");
       ctx.restore();
     }
 
-    // Film-strip mark, geometry lifted from og-image.svg so the card matches
-    // the site header exactly. Natural bounds 198x82, drawn centered on cx.
+    // Film-strip mark, matching the site header and og-image.png.
+    // Natural bounds 198x82, drawn centered on cx.
     function drawLogoStrip(ctx, cx, top, scale, theme) {
       ctx.save();
       ctx.translate(cx - (198 * scale) / 2, top);
@@ -298,17 +308,15 @@
       ctx.textAlign = "center";
 
       var idle = function(fx, label) {
-        roundRectPath(ctx, fx, 8, 62, 74, 3);
-        ctx.fillStyle = "rgba(255,255,255,0.025)";
-        ctx.fill();
-        ctx.strokeStyle = "rgba(255,255,255,0.13)";
-        ctx.lineWidth = 2;
+        roundRectPath(ctx, fx, 8, 62, 74, theme.frameRadius);
+        ctx.strokeStyle = "rgba(" + theme.ink + ",0.22)";
+        ctx.lineWidth = 2.5;
         ctx.stroke();
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        roundRectPath(ctx, fx + 24, 12, 14, 4, 1); ctx.fill();
-        roundRectPath(ctx, fx + 24, 74, 14, 4, 1); ctx.fill();
-        ctx.font = "800 30px " + OUTFIT;
-        ctx.fillStyle = "rgba(255,255,255,0.16)";
+        ctx.fillStyle = "rgba(" + theme.ink + ",0.12)";
+        roundRectPath(ctx, fx + 24, 13, 14, 4, 1); ctx.fill();
+        roundRectPath(ctx, fx + 24, 73, 14, 4, 1); ctx.fill();
+        ctx.font = "600 30px " + SERIF;
+        ctx.fillStyle = theme.faint;
         ctx.fillText(label, fx + 31, 56);
       };
       idle(0, "3");
@@ -316,19 +324,19 @@
 
       ctx.save();
       ctx.translate(93, 45); ctx.scale(1.1, 1.1); ctx.translate(-93, -45);
-      roundRectPath(ctx, 62, 0, 62, 82, 3);
-      ctx.fillStyle = theme.accentSoft;
+      roundRectPath(ctx, 62, 0, 62, 82, theme.frameRadius);
+      ctx.fillStyle = theme.surface;
       ctx.fill();
       ctx.strokeStyle = theme.accent;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3.5;
       ctx.stroke();
       ctx.fillStyle = theme.accent;
-      ctx.globalAlpha = 0.28;
-      roundRectPath(ctx, 86, 4, 14, 4, 1); ctx.fill();
-      roundRectPath(ctx, 86, 74, 14, 4, 1); ctx.fill();
+      ctx.globalAlpha = 0.35;
+      roundRectPath(ctx, 86, 5, 14, 4, 1); ctx.fill();
+      roundRectPath(ctx, 86, 73, 14, 4, 1); ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.font = "800 30px " + OUTFIT;
-      ctx.fillText("1", 93, 53);
+      ctx.font = "800 36px " + SERIF;
+      ctx.fillText("1", 93, 54);
       ctx.restore();
 
       ctx.restore();
@@ -340,26 +348,26 @@
       var pw = L.posterW;
       var px = L.pad + 96;
       ctx.save();
-      ctx.globalAlpha = 0.62;
+      ctx.globalAlpha = 0.72;
 
       ctx.textBaseline = "alphabetic";
       ctx.textAlign = "right";
-      ctx.font = "800 40px " + OUTFIT;
-      ctx.fillStyle = "rgba(245,243,239,0.45)";
+      ctx.font = "italic 700 42px " + SERIF;
+      ctx.fillStyle = "rgba(" + theme.ink + ",0.4)";
       ctx.fillText("#" + rank, L.pad + 78, y + h / 2 + 14);
 
-      if (img) drawImageCover(ctx, img, px, y, pw, h, 8);
-      else drawPosterPlaceholder(ctx, px, y, pw, h, 8, theme);
+      if (img) drawImageCover(ctx, img, px, y, pw, h, 6);
+      else drawPosterPlaceholder(ctx, px, y, pw, h, 6, theme);
 
       var tx = px + pw + L.rowGap;
       var maxW = L.w - tx - L.pad;
       ctx.textAlign = "left";
-      ctx.fillStyle = SHARE_TEXT;
-      var fitted = fitText(ctx, entry.title, maxW, 1, [36, 32, 28], "600", OUTFIT);
+      ctx.fillStyle = theme.text;
+      var fitted = fitText(ctx, entry.title, maxW, 1, [36, 32, 28], "600", SANS);
       ctx.fillText(fitted.lines[0] || "", tx, y + h / 2 + 2);
 
-      ctx.font = "400 26px " + DMSANS;
-      ctx.fillStyle = SHARE_MUTED;
+      ctx.font = "400 26px " + SANS;
+      ctx.fillStyle = theme.muted;
       var meta = [entry.year, entry.genre].filter(Boolean).join("  ·  ");
       ctx.fillText(truncateToWidth(ctx, meta, maxW), tx, y + h / 2 + 42);
 
@@ -367,16 +375,16 @@
     }
 
     // Stand-in when the ranked title has no neighbour above/below it.
-    function drawSentinelRow(ctx, L, y, label) {
+    function drawSentinelRow(ctx, L, y, label, theme) {
       var h = L.rowH;
       var cy = y + h / 2;
       ctx.save();
       ctx.textBaseline = "middle";
       ctx.textAlign = "center";
-      ctx.font = "700 26px " + OUTFIT;
-      ctx.fillStyle = "rgba(245,243,239,0.34)";
+      ctx.font = "700 26px " + SANS;
+      ctx.fillStyle = "rgba(" + theme.ink + ",0.42)";
       var w = drawTracked(ctx, label, L.w / 2, cy, 4, "center");
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.strokeStyle = "rgba(" + theme.ink + ",0.14)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(L.pad, cy); ctx.lineTo(L.w / 2 - w / 2 - 28, cy);
@@ -392,17 +400,22 @@
     async function renderShareCard(opts) {
       var L = SHARE_LAYOUTS[opts.format] || SHARE_LAYOUTS.feed;
       var theme = opts.isTV ? SHARE_THEMES.tv : SHARE_THEMES.movie;
-      var kind = opts.isTV ? "TV" : "MOVIE";
+      var kind = opts.isTV ? "TV" : "movie";
 
       // Google serves subsetted woff2 with display=swap, so load() has to be
-      // given the actual glyphs or fillText silently falls back to Helvetica.
+      // given the actual glyphs or fillText silently falls back to a system font.
       var glyphs = (opts.movie.title || "") + (opts.movie.genre || "") + (opts.displayName || "");
+      var digits = "#0123456789./";
       try {
         await Promise.all([
-          document.fonts.load('900 60px "Outfit"', "MOVI0123456789#"),
-          document.fonts.load('800 56px "Outfit"', glyphs + "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-          document.fonts.load('600 36px "Outfit"', glyphs),
-          document.fonts.load('400 28px "DM Sans"', glyphs + SHARE_TAGLINE + SHARE_TAGLINE_TV + SHARE_SITE_URL),
+          document.fonts.load('800 60px "Fraunces"', "Movi1" + digits),
+          document.fonts.load('700 56px "Fraunces"', glyphs + digits + "movirank.com"),
+          document.fonts.load('600 36px "Fraunces"', "32"),
+          document.fonts.load('italic 700 44px "Fraunces"', digits),
+          document.fonts.load('italic 500 28px "Fraunces"', glyphs + SHARE_TAGLINE + SHARE_TAGLINE_TV + "My first ranked show movie TV 's ranking · ranked" + digits),
+          document.fonts.load('400 26px "Instrument Sans"', glyphs + digits + "·"),
+          document.fonts.load('600 36px "Instrument Sans"', glyphs),
+          document.fonts.load('700 26px "Instrument Sans"', "TOP BOTTOM OF MY LIST"),
         ]);
         await document.fonts.ready;
       } catch (e) { /* fall back to system fonts rather than block the card */ }
@@ -421,90 +434,55 @@
       var ctx = canvas.getContext("2d");
       ctx.textBaseline = "alphabetic";
 
-      // 1. base
+      // 1. paper
       ctx.fillStyle = theme.bg;
       ctx.fillRect(0, 0, L.w, L.h);
 
-      // 2. blurred poster backdrop (ctx.filter is unsupported in Safari < 17)
-      var canBlur = false;
-      try { ctx.filter = "blur(2px)"; canBlur = ctx.filter !== "none"; ctx.filter = "none"; } catch (e) {}
-      if (heroImg && canBlur) {
-        ctx.save();
-        ctx.filter = "blur(60px)";
-        ctx.globalAlpha = 0.22;
-        drawImageCover(ctx, heroImg, -80, -80, L.w + 160, L.h + 160, 0);
-        ctx.restore();
-        ctx.filter = "none";
-      }
-
-      // 3. accent glow behind the hero
-      var gx = L.heroX + L.heroW / 2;
-      var gy = L.heroY + L.heroH / 2;
-      var glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, L.w * 0.85);
-      glow.addColorStop(0, theme.accentGlow);
-      glow.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, L.w, L.h);
-
-      // 4. 36px grid, same values as og-image.svg
-      ctx.strokeStyle = "rgba(255,255,255,0.018)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (var gxr = 0; gxr <= L.w; gxr += 36) { ctx.moveTo(gxr + 0.5, 0); ctx.lineTo(gxr + 0.5, L.h); }
-      for (var gyr = 0; gyr <= L.h; gyr += 36) { ctx.moveTo(0, gyr + 0.5); ctx.lineTo(L.w, gyr + 0.5); }
-      ctx.stroke();
-
-      // 5. bottom darkening so the footer stays legible over the backdrop
-      var fade = ctx.createLinearGradient(0, L.h - 320, 0, L.h);
-      fade.addColorStop(0, "rgba(0,0,0,0)");
-      fade.addColorStop(1, "rgba(0,0,0,0.72)");
-      ctx.fillStyle = fade;
-      ctx.fillRect(0, L.h - 320, L.w, 320);
-
-      // 6. header: film strip + wordmark
+      // 2. header: film strip + wordmark
       drawLogoStrip(ctx, L.w / 2, L.logoY, L.logoScale, theme);
-      ctx.font = "900 " + L.wordmarkSize + "px " + OUTFIT;
-      ctx.fillStyle = SHARE_TEXT;
-      drawTracked(ctx, "MOVI", L.w / 2, L.wordmarkY, L.wordmarkTrack, "center");
+      ctx.font = "800 " + L.wordmarkSize + "px " + SERIF;
+      ctx.fillStyle = theme.text;
+      drawTracked(ctx, "Movi", L.w / 2, L.wordmarkY, L.wordmarkTrack, "center");
 
       // byline
       var who = (opts.displayName || "").trim();
-      var first = who ? who.split(/\s+/)[0].toUpperCase() : "";
+      var first = who ? who.split(/\s+/)[0] : "";
       var byline;
-      if (opts.total <= 1) byline = "MY FIRST RANKED " + kind;
-      else byline = (first ? first + "'S " : "MY ") + kind + " RANKING · " + opts.total + " RANKED";
-      ctx.font = "700 " + L.bylineSize + "px " + OUTFIT;
-      ctx.fillStyle = SHARE_MUTED;
-      drawTracked(ctx, byline, L.w / 2, L.bylineY, L.bylineTrack, "center");
+      if (opts.total <= 1) byline = "My first ranked " + (opts.isTV ? "show" : "movie");
+      else byline = (first ? first + "\u2019s " : "My ") + kind + " ranking \u00b7 " + opts.total + " ranked";
+      ctx.font = "italic 500 " + L.bylineSize + "px " + SERIF;
+      ctx.fillStyle = theme.muted;
+      ctx.textAlign = "center";
+      ctx.fillText(truncateToWidth(ctx, byline, L.w - L.pad * 2), L.w / 2, L.bylineY);
 
-      // 7. above / hero / below
+      // 3. above / hero / below
       if (opts.above) drawNeighborRow(ctx, L, L.aboveY, opts.above, opts.rank - 1, aboveImg, theme);
-      else drawSentinelRow(ctx, L, L.aboveY, "▲  TOP OF MY LIST");
+      else drawSentinelRow(ctx, L, L.aboveY, "\u25B2  TOP OF MY LIST", theme);
 
       if (opts.below) drawNeighborRow(ctx, L, L.belowY, opts.below, opts.rank + 1, belowImg, theme);
-      else drawSentinelRow(ctx, L, L.belowY, "▼  BOTTOM OF MY LIST");
+      else drawSentinelRow(ctx, L, L.belowY, "\u25BC  BOTTOM OF MY LIST", theme);
 
       // hero poster
       ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,0.65)";
-      ctx.shadowBlur = 60;
-      ctx.shadowOffsetY = 18;
-      roundRectPath(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20);
+      ctx.shadowColor = theme.shadow;
+      ctx.shadowBlur = 50;
+      ctx.shadowOffsetY = 22;
+      roundRectPath(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 14);
       ctx.fillStyle = theme.surface;
       ctx.fill();
       ctx.restore();
 
-      if (heroImg) drawImageCover(ctx, heroImg, L.heroX, L.heroY, L.heroW, L.heroH, 20);
-      else drawPosterPlaceholder(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20, theme);
+      if (heroImg) drawImageCover(ctx, heroImg, L.heroX, L.heroY, L.heroW, L.heroH, 14);
+      else drawPosterPlaceholder(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 14, theme);
 
       // Measured up front: the pill overlaps the poster's bottom-right, so the
       // "year · genre" line underneath has to know how much room is left.
-      var scoreRGB = shareScoreRGB(opts.score);
+      var scoreColor = shareScoreColor(opts.score, theme);
       var scoreLabel = opts.score.toFixed(1);
-      var sufSize = Math.round(L.scoreSize * 0.34);
-      ctx.font = "900 " + L.scoreSize + "px " + OUTFIT;
+      var sufSize = Math.round(L.scoreSize * 0.36);
+      ctx.font = "700 " + L.scoreSize + "px " + SERIF;
       var scoreW = ctx.measureText(scoreLabel).width;
-      ctx.font = "700 " + sufSize + "px " + OUTFIT;
+      ctx.font = "600 " + sufSize + "px " + SERIF;
       var sufW = ctx.measureText("/10").width;
       var pillPad = Math.round(L.scoreSize * 0.40);
       var pillW = scoreW + 8 + sufW + pillPad * 2;
@@ -512,13 +490,13 @@
 
       // title scrim baked onto the poster keeps the above/hero/below sandwich tight
       ctx.save();
-      roundRectPath(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 20);
+      roundRectPath(ctx, L.heroX, L.heroY, L.heroW, L.heroH, 14);
       ctx.clip();
       var scrimTop = L.heroY + L.heroH - 300;
       var scrim = ctx.createLinearGradient(0, scrimTop, 0, L.heroY + L.heroH);
-      scrim.addColorStop(0, "rgba(0,0,0,0)");
-      scrim.addColorStop(0.55, "rgba(0,0,0,0.72)");
-      scrim.addColorStop(1, "rgba(0,0,0,0.94)");
+      scrim.addColorStop(0, "rgba(" + theme.ink + ",0)");
+      scrim.addColorStop(0.55, "rgba(" + theme.ink + ",0.72)");
+      scrim.addColorStop(1, "rgba(" + theme.ink + ",0.94)");
       ctx.fillStyle = scrim;
       ctx.fillRect(L.heroX, scrimTop, L.heroW, 300);
 
@@ -526,15 +504,15 @@
       var tMaxW = L.heroW - 56;
       var metaBaseline = L.heroY + L.heroH - 40;
       ctx.textAlign = "left";
-      ctx.font = "400 26px " + DMSANS;
-      ctx.fillStyle = "rgba(245,243,239,0.72)";
+      ctx.font = "400 26px " + SANS;
+      ctx.fillStyle = "rgba(255,251,243,0.78)";
       var meta = [opts.movie.year, opts.movie.genre].filter(Boolean).join("  ·  ");
       var metaMaxW = Math.max(150, L.heroW - pillW - 18);
       ctx.fillText(truncateToWidth(ctx, meta, metaMaxW), tx, metaBaseline);
 
-      var fitted = fitText(ctx, opts.movie.title, tMaxW, 2, L.heroTitleSizes, "800", OUTFIT);
-      ctx.fillStyle = "#FFFFFF";
-      var lh = fitted.size * 1.14;
+      var fitted = fitText(ctx, opts.movie.title, tMaxW, 2, L.heroTitleSizes, "700", SERIF);
+      ctx.fillStyle = "#FFFBF3";
+      var lh = fitted.size * 1.12;
       var titleBottom = metaBaseline - 46;
       for (var li = 0; li < fitted.lines.length; li++) {
         var yy = titleBottom - (fitted.lines.length - 1 - li) * lh;
@@ -542,35 +520,32 @@
       }
       ctx.restore();
 
-      // accent border on top of the artwork
+      // accent ring with a paper gap, like the picked poster in a matchup
       ctx.save();
-      roundRectPath(ctx, L.heroX + 1.5, L.heroY + 1.5, L.heroW - 3, L.heroH - 3, 19);
+      roundRectPath(ctx, L.heroX - 8, L.heroY - 8, L.heroW + 16, L.heroH + 16, 21);
       ctx.strokeStyle = theme.accent;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.stroke();
       ctx.restore();
 
       // rank badge, overlapping the hero's top-left corner
       ctx.save();
-      ctx.font = "900 " + L.rankSize + "px " + OUTFIT;
+      ctx.font = "italic 700 " + L.rankSize + "px " + SERIF;
       var rankLabel = "#" + opts.rank;
-      var badgeW = Math.max(92, ctx.measureText(rankLabel).width + 38);
+      var badgeW = Math.max(92, ctx.measureText(rankLabel).width + 42);
       var badgeH = L.rankBadgeH;
       var badgeX = L.heroX - 24;
       var badgeY = L.heroY - 28;
-      ctx.shadowColor = "rgba(0,0,0,0.55)";
-      ctx.shadowBlur = 28;
+      ctx.shadowColor = theme.shadow;
+      ctx.shadowBlur = 24;
       ctx.shadowOffsetY = 8;
-      var bg = ctx.createLinearGradient(badgeX, badgeY, badgeX + badgeW, badgeY + badgeH);
-      bg.addColorStop(0, theme.accent);
-      bg.addColorStop(1, opts.isTV ? "#2DAF7C" : "#FF7A3D");
-      roundRectPath(ctx, badgeX, badgeY, badgeW, badgeH, 18);
-      ctx.fillStyle = bg;
+      roundRectPath(ctx, badgeX, badgeY, badgeW, badgeH, 16);
+      ctx.fillStyle = theme.accent;
       ctx.fill();
       ctx.shadowColor = "transparent";
-      ctx.fillStyle = "#FFFFFF";
+      ctx.fillStyle = "#FFFBF3";
       ctx.textAlign = "center";
-      ctx.fillText(rankLabel, badgeX + badgeW / 2, badgeY + badgeH / 2 + Math.round(L.rankSize * 0.36));
+      ctx.fillText(rankLabel, badgeX + badgeW / 2, badgeY + badgeH / 2 + Math.round(L.rankSize * 0.34));
       ctx.restore();
 
       // Score pill, overlapping the hero's bottom-right corner. This is the
@@ -579,38 +554,35 @@
       ctx.save();
       var pillX = L.heroX + L.heroW + 26 - pillW;
       var pillY = L.heroY + L.heroH - pillH / 2 - 10;
-      ctx.shadowColor = "rgba(0,0,0,0.6)";
+      ctx.shadowColor = theme.shadow;
       ctx.shadowBlur = 30;
       ctx.shadowOffsetY = 10;
       roundRectPath(ctx, pillX, pillY, pillW, pillH, pillH / 2);
-      ctx.fillStyle = "rgba(12,10,9,0.94)";
+      ctx.fillStyle = theme.surface;
       ctx.fill();
       ctx.shadowColor = "transparent";
-      roundRectPath(ctx, pillX, pillY, pillW, pillH, pillH / 2);
-      ctx.fillStyle = "rgba(" + scoreRGB + ",0.16)";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(" + scoreRGB + ",0.55)";
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(" + theme.ink + ",0.14)";
+      ctx.lineWidth = 2;
       ctx.stroke();
 
-      var baseline = pillY + pillH / 2 + Math.round(L.scoreSize * 0.35);
+      var baseline = pillY + pillH / 2 + Math.round(L.scoreSize * 0.34);
       ctx.textAlign = "left";
-      ctx.font = "900 " + L.scoreSize + "px " + OUTFIT;
-      ctx.fillStyle = "rgb(" + scoreRGB + ")";
+      ctx.font = "700 " + L.scoreSize + "px " + SERIF;
+      ctx.fillStyle = scoreColor;
       ctx.fillText(scoreLabel, pillX + pillPad, baseline);
-      ctx.font = "700 " + sufSize + "px " + OUTFIT;
-      ctx.fillStyle = "rgba(" + scoreRGB + ",0.6)";
+      ctx.font = "600 " + sufSize + "px " + SERIF;
+      ctx.fillStyle = theme.muted;
       ctx.fillText("/10", pillX + pillPad + scoreW + 8, baseline);
       ctx.restore();
 
-      // 8. footer branding — the whole reason the card exists
+      // 4. footer branding — the whole reason the card exists
       ctx.save();
       ctx.textAlign = "center";
-      ctx.font = "800 " + L.footerSize + "px " + OUTFIT;
+      ctx.font = "700 " + L.footerSize + "px " + SERIF;
       ctx.fillStyle = theme.accent;
-      drawTracked(ctx, "movirank.com", L.w / 2, L.footerY, 2, "center");
-      ctx.font = "400 " + L.taglineSize + "px " + DMSANS;
-      ctx.fillStyle = SHARE_MUTED;
+      ctx.fillText("movirank.com", L.w / 2, L.footerY);
+      ctx.font = "italic 500 " + L.taglineSize + "px " + SERIF;
+      ctx.fillStyle = theme.muted;
       ctx.fillText(opts.isTV ? SHARE_TAGLINE_TV : SHARE_TAGLINE, L.w / 2, L.footerY + L.taglineGap);
       ctx.restore();
 
