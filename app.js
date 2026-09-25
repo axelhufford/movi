@@ -1265,7 +1265,7 @@ function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, ranked
     cats.push({ title: "Popular", catKey: "popular", movies: mergeResults(db2.filter((m) => popularIdSet.has(m.id)), getTmdbMovies("popular")) });
     const localAcclaimed = db2.filter((m) => m.rating && m.rating >= 8);
     const acclaimedMerged = mergeResults(localAcclaimed, getTmdbMovies("acclaimed"));
-    if (acclaimedMerged.length > 0) cats.push({ title: "\u{1F3C6} Critically Acclaimed", catKey: "acclaimed", movies: acclaimedMerged });
+    if (acclaimedMerged.length > 0) cats.push({ title: "Critically Acclaimed", catKey: "acclaimed", movies: acclaimedMerged });
     cats.push({ title: "New Releases", catKey: "newReleases", movies: mergeResults(db2.filter((m) => parseInt(m.year) >= NEW_RELEASE_YEAR), getTmdbMovies("newReleases")) });
     cats.push({ title: genre1, catKey: "g1", movies: mergeResults(db2.filter((m) => m.genre === genre1), getTmdbMovies("g1")) });
     cats.push({ title: genre2, catKey: "g2", movies: mergeResults(db2.filter((m) => m.genre === genre2), getTmdbMovies("g2")) });
@@ -1533,7 +1533,7 @@ function ComparisonView({ session, onChoice, onCancel, onWatchlist, onSkip, item
     if (sc === currentCell) cellClass += " current";
     stripCells.push(/* @__PURE__ */ React.createElement("span", { key: sc, className: cellClass }));
   }
-  return /* @__PURE__ */ React.createElement("div", { className: "comparison-overlay" }, /* @__PURE__ */ React.createElement("div", { className: "comparison-box" }, /* @__PURE__ */ React.createElement("div", { className: "comparison-title" }, "Which ", itemLabel || "movie", " do you prefer?"), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "comparison-overlay" }, /* @__PURE__ */ React.createElement("div", { className: "comparison-box" }, /* @__PURE__ */ React.createElement("div", { className: "comparison-title" }, "Which ", itemLabel || "movie", " do you ", /* @__PURE__ */ React.createElement("em", null, "prefer?")), /* @__PURE__ */ React.createElement(
     "div",
     {
       className: "comparison-strip",
@@ -3454,12 +3454,16 @@ function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList, isTV, onS
     onClose();
   } }, "Remove"))));
 }
+function ThemeToggle({ nightMode, onToggle }) {
+  var label = nightMode ? "Switch to light mode" : "Switch to dark mode";
+  return /* @__PURE__ */ React.createElement("button", { className: "theme-toggle", onClick: onToggle, title: label, "aria-label": label }, nightMode ? /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("circle", { cx: "12", cy: "12", r: "4" }), /* @__PURE__ */ React.createElement("path", { d: "M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" })) : /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, /* @__PURE__ */ React.createElement("path", { d: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" })));
+}
 function App() {
   const [mode, setMode] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("type") === "tv" ? "tv" : "movies";
   });
-  const [dayMode, setDayMode] = useState(() => localStorage.getItem("movi-daymode") === "true");
+  const [nightMode, setNightMode] = useState(() => localStorage.getItem("movi-theme") === "dark");
   const [isPrivate, setIsPrivate] = useState(() => localStorage.getItem("movi-private") === "true");
   const [rankedList, setRankedList] = useState(() => {
     try {
@@ -3524,11 +3528,13 @@ function App() {
   const activeWatchlistIds = isTV ? tvWatchlistIds : watchlistIds;
   useEffect(() => {
     document.body.style.background = "";
-    document.body.style.backgroundColor = dayMode ? isTV ? "#F5FAF7" : "#FBF7F0" : isTV ? "#0D120F" : "#0F0E0D";
-  }, [isTV, dayMode]);
-  useEffect(() => {
-    localStorage.setItem("movi-daymode", dayMode);
-  }, [dayMode]);
+    document.body.style.backgroundColor = nightMode ? isTV ? "#0D120F" : "#0F0E0D" : isTV ? "#EEF0E5" : "#F5EFE4";
+  }, [isTV, nightMode]);
+  function toggleNightMode() {
+    const next = !nightMode;
+    localStorage.setItem("movi-theme", next ? "dark" : "light");
+    setNightMode(next);
+  }
   async function backfillRatings(list, setList, type) {
     const needsCleanup = list.some((m) => m.genre && m.genre.includes("Critically Acclaimed"));
     if (needsCleanup) {
@@ -4052,7 +4058,7 @@ function App() {
     if (user && viewingUid === user.uid) {
       handleBackFromProfile();
     } else {
-      return /* @__PURE__ */ React.createElement("div", { className: `${isTV ? "tv-mode" : ""} ${dayMode ? "day-mode" : ""}` }, /* @__PURE__ */ React.createElement("button", { className: "theme-toggle", onClick: () => setDayMode((d) => !d), title: dayMode ? "Night mode" : "Day mode" }, dayMode ? "\u{1F319}" : "\u2600\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "header" }, /* @__PURE__ */ React.createElement("div", { className: "logo-strip", onClick: handleGoHome }, /* @__PURE__ */ React.createElement("div", { className: "logo-frame" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "3"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" })), /* @__PURE__ */ React.createElement("div", { className: "logo-frame active" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "1"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" })), /* @__PURE__ */ React.createElement("div", { className: "logo-frame" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "2"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" }))), /* @__PURE__ */ React.createElement("div", { className: "logo-wordmark" }, "MOVI"), /* @__PURE__ */ React.createElement("div", { className: "logo-tv-sub" }, "Television"), /* @__PURE__ */ React.createElement("p", null, isTV ? "TV show" : "Movie", " rankings")), /* @__PURE__ */ React.createElement(
+      return /* @__PURE__ */ React.createElement("div", { className: `app-theme ${isTV ? "tv-mode" : ""} ${nightMode ? "night-mode" : ""}` }, /* @__PURE__ */ React.createElement(ThemeToggle, { nightMode, onToggle: toggleNightMode }), /* @__PURE__ */ React.createElement("div", { className: "header" }, /* @__PURE__ */ React.createElement("div", { className: "logo-strip", onClick: handleGoHome }, /* @__PURE__ */ React.createElement("div", { className: "logo-frame" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "3"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" })), /* @__PURE__ */ React.createElement("div", { className: "logo-frame active" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "1"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" })), /* @__PURE__ */ React.createElement("div", { className: "logo-frame" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "2"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" }))), /* @__PURE__ */ React.createElement("div", { className: "logo-wordmark" }, "Movi"), /* @__PURE__ */ React.createElement("div", { className: "logo-tv-sub" }, "Television"), /* @__PURE__ */ React.createElement("p", null, isTV ? "TV show" : "Movie", " rankings")), /* @__PURE__ */ React.createElement(
         AuthBar,
         {
           user,
@@ -4128,7 +4134,7 @@ function App() {
       ), /* @__PURE__ */ React.createElement("footer", { style: { textAlign: "center", padding: "40px 0 20px", opacity: 0.5 } }, /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-muted)", fontSize: "12px", marginBottom: "8px" } }, "a website by Axel Hufford \xB7 ", /* @__PURE__ */ React.createElement("a", { href: "https://axelhufford.com", target: "_blank", rel: "noopener noreferrer", style: { color: "var(--text-muted)" } }, "axelhufford.com")), /* @__PURE__ */ React.createElement("a", { href: "https://www.themoviedb.org", target: "_blank", rel: "noopener noreferrer", style: { display: "inline-flex", alignItems: "center", gap: "8px", color: "var(--text-muted)", textDecoration: "none", fontSize: "12px" } }, /* @__PURE__ */ React.createElement("img", { src: "https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg", alt: "TMDB", style: { height: "16px" } }), "Data provided by TMDB")));
     }
   }
-  return /* @__PURE__ */ React.createElement("div", { className: `${isTV ? "tv-mode" : ""} ${dayMode ? "day-mode" : ""}` }, /* @__PURE__ */ React.createElement("button", { className: "theme-toggle", onClick: () => setDayMode((d) => !d), title: dayMode ? "Night mode" : "Day mode" }, dayMode ? "\u{1F319}" : "\u2600\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "header" }, /* @__PURE__ */ React.createElement("div", { className: "logo-strip", onClick: handleGoHome }, /* @__PURE__ */ React.createElement("div", { className: "logo-frame" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "3"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" })), /* @__PURE__ */ React.createElement("div", { className: "logo-frame active" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "1"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" })), /* @__PURE__ */ React.createElement("div", { className: "logo-frame" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "2"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" }))), /* @__PURE__ */ React.createElement("div", { className: "logo-wordmark" }, "MOVI"), /* @__PURE__ */ React.createElement("div", { className: "logo-tv-sub" }, "Television"), /* @__PURE__ */ React.createElement("p", null, "Every ", isTV ? "TV show" : "movie", " ranked, one matchup at a time.")), /* @__PURE__ */ React.createElement("div", { className: "mode-toggle" }, /* @__PURE__ */ React.createElement("button", { className: `mode-btn ${!isTV ? "active" : ""}`, onClick: () => setMode("movies") }, "\u{1F3AC} Movies"), /* @__PURE__ */ React.createElement("button", { className: `mode-btn ${isTV ? "active" : ""}`, onClick: () => setMode("tv") }, "\u{1F4FA} TV Shows")), /* @__PURE__ */ React.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: `app-theme ${isTV ? "tv-mode" : ""} ${nightMode ? "night-mode" : ""}` }, /* @__PURE__ */ React.createElement(ThemeToggle, { nightMode, onToggle: toggleNightMode }), /* @__PURE__ */ React.createElement("div", { className: "header" }, /* @__PURE__ */ React.createElement("div", { className: "logo-strip", onClick: handleGoHome }, /* @__PURE__ */ React.createElement("div", { className: "logo-frame" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "3"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" })), /* @__PURE__ */ React.createElement("div", { className: "logo-frame active" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "1"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" })), /* @__PURE__ */ React.createElement("div", { className: "logo-frame" }, /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-top" }), /* @__PURE__ */ React.createElement("span", { className: "frame-num" }, "2"), /* @__PURE__ */ React.createElement("span", { className: "sprocket sprocket-bot" }))), /* @__PURE__ */ React.createElement("div", { className: "logo-wordmark" }, "Movi"), /* @__PURE__ */ React.createElement("div", { className: "logo-tv-sub" }, "Television"), /* @__PURE__ */ React.createElement("p", null, "Every ", isTV ? "TV show" : "movie", " ranked, one matchup at a time.")), /* @__PURE__ */ React.createElement("div", { className: "mode-toggle" }, /* @__PURE__ */ React.createElement("button", { className: `mode-btn ${!isTV ? "active" : ""}`, onClick: () => setMode("movies") }, "Movies"), /* @__PURE__ */ React.createElement("button", { className: `mode-btn ${isTV ? "active" : ""}`, onClick: () => setMode("tv") }, "TV Shows")), /* @__PURE__ */ React.createElement(
     AuthBar,
     {
       user,

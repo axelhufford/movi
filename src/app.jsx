@@ -109,7 +109,7 @@
     // ─── Share Card Canvas ──────────────────────────────────────
     // Draws a shareable social image entirely with Canvas 2D. Deliberately
     // reads from literal constants rather than CSS variables so the export is
-    // identical regardless of day-mode / viewport / device pixel ratio.
+    // identical regardless of light/night theme / viewport / device pixel ratio.
     const SHARE_SITE_URL = "https://movirank.com";
     const SHARE_TAGLINE = "Every movie ranked, one matchup at a time.";
     const SHARE_TAGLINE_TV = "Every show ranked, one matchup at a time.";
@@ -1324,7 +1324,7 @@
         // Critically Acclaimed
         const localAcclaimed = db.filter(m => m.rating && m.rating >= 8.0);
         const acclaimedMerged = mergeResults(localAcclaimed, getTmdbMovies("acclaimed"));
-        if (acclaimedMerged.length > 0) cats.push({ title: "\ud83c\udfc6 Critically Acclaimed", catKey: "acclaimed", movies: acclaimedMerged });
+        if (acclaimedMerged.length > 0) cats.push({ title: "Critically Acclaimed", catKey: "acclaimed", movies: acclaimedMerged });
 
         // New Releases
         cats.push({ title: "New Releases", catKey: "newReleases", movies: mergeResults(db.filter(m => parseInt(m.year) >= NEW_RELEASE_YEAR), getTmdbMovies("newReleases")) });
@@ -1637,7 +1637,7 @@
       return (
         <div className="comparison-overlay">
           <div className="comparison-box">
-            <div className="comparison-title">Which {itemLabel || "movie"} do you prefer?</div>
+            <div className="comparison-title">Which {itemLabel || "movie"} do you <em>prefer?</em></div>
             <div className="comparison-strip" role="progressbar"
               aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={totalCells}
               aria-label={`Comparison ${step + 1} of ~${totalCells}`}>
@@ -3780,13 +3780,35 @@
       );
     }
 
+    // Shows the mode you'd switch to: a moon in light mode, a sun in night mode.
+    function ThemeToggle({ nightMode, onToggle }) {
+      var label = nightMode ? "Switch to light mode" : "Switch to dark mode";
+      return (
+        <button className="theme-toggle" onClick={onToggle} title={label} aria-label={label}>
+          {nightMode ? (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+            </svg>
+          )}
+        </button>
+      );
+    }
+
     // ─── App ────────────────────────────────────────────────────
     function App() {
       const [mode, setMode] = useState(() => {
         const params = new URLSearchParams(window.location.search);
         return params.get("type") === "tv" ? "tv" : "movies";
       });
-      const [dayMode, setDayMode] = useState(() => localStorage.getItem("movi-daymode") === "true");
+      // Light is the default. The old "movi-daymode" key was written on every
+      // load, so it can't tell a deliberate dark choice from the old default;
+      // it is ignored and only an explicit toggle is remembered.
+      const [nightMode, setNightMode] = useState(() => localStorage.getItem("movi-theme") === "dark");
       const [isPrivate, setIsPrivate] = useState(() => localStorage.getItem("movi-private") === "true");
       const [rankedList, setRankedList] = useState(() => {
         try { return JSON.parse(localStorage.getItem("movi-ranked-list")) || []; } catch { return []; }
@@ -3837,20 +3859,20 @@
       const tvWatchlistIds = new Set(tvWatchlist.map(m => m.id));
       const activeWatchlistIds = isTV ? tvWatchlistIds : watchlistIds;
 
-      // Apply theme to body background. Only set background-color — setting the
-      // `background` shorthand inline would override the stylesheet's
-      // background-image gradients (hero glow, day-mode wash).
+      // Apply theme to body background (the overscroll area outside the app).
+      // Mirrors the body:has() rules in index.html for browsers without :has().
       useEffect(() => {
         document.body.style.background = "";
-        document.body.style.backgroundColor = dayMode
-          ? (isTV ? "#F5FAF7" : "#FBF7F0")
-          : (isTV ? "#0D120F" : "#0F0E0D");
-      }, [isTV, dayMode]);
+        document.body.style.backgroundColor = nightMode
+          ? (isTV ? "#0D120F" : "#0F0E0D")
+          : (isTV ? "#EEF0E5" : "#F5EFE4");
+      }, [isTV, nightMode]);
 
-      // Persist day mode preference
-      useEffect(() => {
-        localStorage.setItem("movi-daymode", dayMode);
-      }, [dayMode]);
+      function toggleNightMode() {
+        const next = !nightMode;
+        localStorage.setItem("movi-theme", next ? "dark" : "light");
+        setNightMode(next);
+      }
 
       // Backfill TMDB ratings for movies/shows missing them
       async function backfillRatings(list, setList, type) {
@@ -4430,17 +4452,15 @@
           handleBackFromProfile();
         } else {
           return (
-            <div className={`${isTV ? "tv-mode" : ""} ${dayMode ? "day-mode" : ""}`}>
-              <button className="theme-toggle" onClick={() => setDayMode(d => !d)} title={dayMode ? "Night mode" : "Day mode"}>
-                {dayMode ? "🌙" : "☀️"}
-              </button>
+            <div className={`app-theme ${isTV ? "tv-mode" : ""} ${nightMode ? "night-mode" : ""}`}>
+              <ThemeToggle nightMode={nightMode} onToggle={toggleNightMode} />
               <div className="header">
                 <div className="logo-strip" onClick={handleGoHome}>
                   <div className="logo-frame"><span className="sprocket sprocket-top"></span><span className="frame-num">3</span><span className="sprocket sprocket-bot"></span></div>
                   <div className="logo-frame active"><span className="sprocket sprocket-top"></span><span className="frame-num">1</span><span className="sprocket sprocket-bot"></span></div>
                   <div className="logo-frame"><span className="sprocket sprocket-top"></span><span className="frame-num">2</span><span className="sprocket sprocket-bot"></span></div>
                 </div>
-                <div className="logo-wordmark">MOVI</div>
+                <div className="logo-wordmark">Movi</div>
                 <div className="logo-tv-sub">Television</div>
                 <p>{isTV ? "TV show" : "Movie"} rankings</p>
               </div>
@@ -4484,27 +4504,25 @@
       }
 
       return (
-        <div className={`${isTV ? "tv-mode" : ""} ${dayMode ? "day-mode" : ""}`}>
-          <button className="theme-toggle" onClick={() => setDayMode(d => !d)} title={dayMode ? "Night mode" : "Day mode"}>
-            {dayMode ? "🌙" : "☀️"}
-          </button>
+        <div className={`app-theme ${isTV ? "tv-mode" : ""} ${nightMode ? "night-mode" : ""}`}>
+          <ThemeToggle nightMode={nightMode} onToggle={toggleNightMode} />
           <div className="header">
             <div className="logo-strip" onClick={handleGoHome}>
                   <div className="logo-frame"><span className="sprocket sprocket-top"></span><span className="frame-num">3</span><span className="sprocket sprocket-bot"></span></div>
                   <div className="logo-frame active"><span className="sprocket sprocket-top"></span><span className="frame-num">1</span><span className="sprocket sprocket-bot"></span></div>
                   <div className="logo-frame"><span className="sprocket sprocket-top"></span><span className="frame-num">2</span><span className="sprocket sprocket-bot"></span></div>
                 </div>
-                <div className="logo-wordmark">MOVI</div>
+                <div className="logo-wordmark">Movi</div>
                 <div className="logo-tv-sub">Television</div>
             <p>Every {isTV ? "TV show" : "movie"} ranked, one matchup at a time.</p>
           </div>
 
           <div className="mode-toggle">
             <button className={`mode-btn ${!isTV ? "active" : ""}`} onClick={() => setMode("movies")}>
-              &#x1F3AC; Movies
+              Movies
             </button>
             <button className={`mode-btn ${isTV ? "active" : ""}`} onClick={() => setMode("tv")}>
-              &#x1F4FA; TV Shows
+              TV Shows
             </button>
           </div>
 
