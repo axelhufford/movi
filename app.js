@@ -88,6 +88,7 @@ const SHARE_TAGLINE_TV = "Every show ranked, one matchup at a time.";
 const SHARE_THEMES = {
   movie: {
     bg: "#F5EFE4",
+    bgRGB: "245,239,228",
     surface: "#FFFBF3",
     surface2: "#EBE3D4",
     text: "#1C1A17",
@@ -101,6 +102,7 @@ const SHARE_THEMES = {
   },
   tv: {
     bg: "#EEF0E5",
+    bgRGB: "238,240,229",
     surface: "#F8F9F2",
     surface2: "#E2E6D8",
     text: "#1A1D19",
@@ -452,6 +454,29 @@ async function renderShareCard(opts) {
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, L.w, L.h);
+  var canBlur = false;
+  try {
+    ctx.filter = "blur(2px)";
+    canBlur = ctx.filter !== "none";
+    ctx.filter = "none";
+  } catch (e) {
+  }
+  if (heroImg && canBlur) {
+    ctx.save();
+    ctx.filter = "blur(60px) saturate(1.15)";
+    ctx.globalAlpha = 0.8;
+    drawImageCover(ctx, heroImg, -80, -80, L.w + 160, L.h + 160, 0);
+    ctx.restore();
+    ctx.filter = "none";
+    var veil = ctx.createLinearGradient(0, 0, 0, L.h);
+    veil.addColorStop(0, "rgba(" + theme.bgRGB + ",0.84)");
+    veil.addColorStop(0.2, "rgba(" + theme.bgRGB + ",0.5)");
+    veil.addColorStop(0.5, "rgba(" + theme.bgRGB + ",0.2)");
+    veil.addColorStop(0.8, "rgba(" + theme.bgRGB + ",0.5)");
+    veil.addColorStop(1, "rgba(" + theme.bgRGB + ",0.88)");
+    ctx.fillStyle = veil;
+    ctx.fillRect(0, 0, L.w, L.h);
+  }
   drawLogoStrip(ctx, L.w / 2, L.logoY, L.logoScale, theme);
   ctx.font = "800 " + L.wordmarkSize + "px " + SERIF;
   ctx.fillStyle = theme.text;

@@ -118,12 +118,12 @@
     // accent. TV frames get rounded corners, like the site header.
     const SHARE_THEMES = {
       movie: {
-        bg: "#F5EFE4", surface: "#FFFBF3", surface2: "#EBE3D4",
+        bg: "#F5EFE4", bgRGB: "245,239,228", surface: "#FFFBF3", surface2: "#EBE3D4",
         text: "#1C1A17", muted: "#6A635A", faint: "#A0978A", ink: "28,26,23",
         accent: "#C8361F", shadow: "rgba(60,40,20,0.38)", scoreHigh: "#2F6B45", frameRadius: 3,
       },
       tv: {
-        bg: "#EEF0E5", surface: "#F8F9F2", surface2: "#E2E6D8",
+        bg: "#EEF0E5", bgRGB: "238,240,229", surface: "#F8F9F2", surface2: "#E2E6D8",
         text: "#1A1D19", muted: "#5F665C", faint: "#9AA095", ink: "26,29,25",
         // Ink, not green, so a high score doesn't read as the TV accent
         accent: "#1F6B4E", shadow: "rgba(30,45,35,0.38)", scoreHigh: "#1A1D19", frameRadius: 10,
@@ -437,6 +437,28 @@
       // 1. paper
       ctx.fillStyle = theme.bg;
       ctx.fillRect(0, 0, L.w, L.h);
+
+      // Blurred hero poster behind everything (ctx.filter is unsupported in
+      // Safari < 17, which gets plain paper). A paper veil, heaviest at the top
+      // and bottom, keeps the header, byline and footer legible over it.
+      var canBlur = false;
+      try { ctx.filter = "blur(2px)"; canBlur = ctx.filter !== "none"; ctx.filter = "none"; } catch (e) {}
+      if (heroImg && canBlur) {
+        ctx.save();
+        ctx.filter = "blur(60px) saturate(1.15)";
+        ctx.globalAlpha = 0.8;
+        drawImageCover(ctx, heroImg, -80, -80, L.w + 160, L.h + 160, 0);
+        ctx.restore();
+        ctx.filter = "none";
+        var veil = ctx.createLinearGradient(0, 0, 0, L.h);
+        veil.addColorStop(0, "rgba(" + theme.bgRGB + ",0.84)");
+        veil.addColorStop(0.2, "rgba(" + theme.bgRGB + ",0.5)");
+        veil.addColorStop(0.5, "rgba(" + theme.bgRGB + ",0.2)");
+        veil.addColorStop(0.8, "rgba(" + theme.bgRGB + ",0.5)");
+        veil.addColorStop(1, "rgba(" + theme.bgRGB + ",0.88)");
+        ctx.fillStyle = veil;
+        ctx.fillRect(0, 0, L.w, L.h);
+      }
 
       // 2. header: film strip + wordmark
       drawLogoStrip(ctx, L.w / 2, L.logoY, L.logoScale, theme);
