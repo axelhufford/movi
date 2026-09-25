@@ -44,6 +44,24 @@
       .filter(m => { if (tvSeen.has(m.id)) return false; tvSeen.add(m.id); return true; });
     const TV_DB_IDS = new Set(TV_DB.map(m => m.id));
 
+    // The New York Times' "100 Best" lists (nyt-lists.js), in NYT order. Entries
+    // carry TMDB ids, so being ranked = "I've seen it" and being on the
+    // watchlist = "I want to see it", with nothing extra to store.
+    function buildNytList(rows) {
+      return rows.map(([nytRank, id, title, year, genre, poster]) => ({ id, title, year: String(year), genre, poster }));
+    }
+    const NYT_TV = buildNytList(typeof NYT_TV_100 !== "undefined" ? NYT_TV_100 : []);
+    const NYT_MOVIES = buildNytList(typeof NYT_MOVIES_100 !== "undefined" ? NYT_MOVIES_100 : []);
+    const NYT_TV_RANK = new Map(NYT_TV.map((m, i) => [m.id, i + 1]));
+    const NYT_MOVIE_RANK = new Map(NYT_MOVIES.map((m, i) => [m.id, i + 1]));
+    const NYT_LIST_INFO = {
+      tv: { name: "100 Best TV Shows of the 21st Century", url: "https://www.nytimes.com/bestTV" },
+      movie: { name: "100 Best Movies of the 21st Century", url: "https://www.nytimes.com/interactive/2025/movies/best-movies-21st-century.html" },
+    };
+    function nytRankFor(id, isTV) {
+      return (isTV ? NYT_TV_RANK : NYT_MOVIE_RANK).get(id) || null;
+    }
+
     const TMDB_TV_SEARCH_URL = "https://api.themoviedb.org/3/search/tv";
 
     async function searchTMDBTV(query) {
@@ -1094,6 +1112,39 @@
       } catch (e) { return { movies: [], totalPages: 0 }; }
     }
 
+    // " · NYT #12" after a row's year/genre line when the title is on the list
+    function NytTag({ id, isTV }) {
+      var rank = nytRankFor(id, isTV);
+      if (!rank) return null;
+      return (
+        <>
+          {" \u00b7 "}
+          <span className="nyt-tag" title={"#" + rank + " on NYT's " + NYT_LIST_INFO[isTV ? "tv" : "movie"].name}>NYT #{rank}</span>
+        </>
+      );
+    }
+
+    function NytProgress({ list, rankedIds, watchlistIds, isTV }) {
+      var seen = 0, want = 0;
+      list.forEach(function(m) {
+        if (rankedIds.has(m.id)) seen++;
+        else if (watchlistIds && watchlistIds.has(m.id)) want++;
+      });
+      var info = NYT_LIST_INFO[isTV ? "tv" : "movie"];
+      return (
+        <div className="nyt-progress">
+          <div className="nyt-progress-text">
+            <span><strong>{seen}</strong> of {list.length} ranked{want > 0 ? " \u00b7 " + want + " on watchlist" : ""}</span>
+            <a className="nyt-source" href={info.url} target="_blank" rel="noopener noreferrer">NYT list &#x2197;</a>
+          </div>
+          <div className="nyt-progress-bar" role="progressbar" aria-label={"Ranked from NYT's " + info.name}
+            aria-valuemin="0" aria-valuemax={list.length} aria-valuenow={seen}>
+            <div className="nyt-progress-fill" style={{ width: (list.length ? seen / list.length * 100 : 0) + "%" }} />
+          </div>
+        </div>
+      );
+    }
+
     function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, rankedList, localDb, mode }) {
       const isTV = mode === "tv";
       const [tmdbCats, setTmdbCats] = useState({});
@@ -1295,6 +1346,12 @@
 
         const cats = [];
 
+        // NYT 100 Best, in list order
+        const nytList = isTV ? NYT_TV : NYT_MOVIES;
+        if (nytList.length > 0) {
+          cats.push({ title: isTV ? "NYT\u2019s 100 Best TV Shows" : "NYT\u2019s 100 Best Movies", catKey: "nyt", movies: nytList, nyt: true });
+        }
+
         // For You
         const localForYou = rankedList && rankedList.length >= 3 ? (() => {
           const topHalf = rankedList.slice(0, Math.ceil(rankedList.length / 2));
@@ -1342,12 +1399,14 @@
       }, [localDb, isTV, tmdbCats, rankedIds.size, rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map(m => m.id).join(",") : ""]);
 
       // Render a single movie card (shared between row and expanded grid)
-      function renderCard(m) {
+      function renderCard(m, cat) {
         var isRanked = rankedIds.has(m.id);
         var isWatchlisted = watchlistIds && watchlistIds.has(m.id);
+        var nytRank = cat && cat.nyt ? nytRankFor(m.id, isTV) : null;
         return (
           <div key={m.id} className={"rec-card" + (isRanked ? " ranked" : "")}
             onClick={function() { if (!isRanked && !isWatchlisted) { setExpandedCat(null); onSelect(m); } }}>
+            {nytRank && <div className="rec-card-nyt-rank">{nytRank}</div>}
             {isRanked && <div className="rec-card-badge">Ranked</div>}
             {isWatchlisted && <div className="rec-card-badge" style={{background:"rgba(245,197,24,0.9)"}}>&#x2605;</div>}
             <Poster poster={m.poster} title={m.title}
@@ -1432,8 +1491,9 @@
                 <div className="recs-category-title" onClick={function() { setExpandedCat(cat); loadMoreMovies(cat.catKey); }}>
                   {cat.title} <span className="expand-hint">See all &rsaquo;</span>
                 </div>
+                {cat.nyt && <NytProgress list={cat.movies} rankedIds={rankedIds} watchlistIds={watchlistIds} isTV={isTV} />}
                 <div className="recs-row" onScroll={function(e) { handleRowScroll(e, cat.catKey); }}>
-                  {visibleMovies.map(renderCard)}
+                  {visibleMovies.map(function(m) { return renderCard(m, cat); })}
                   {catLoading && <div className="recs-row-loader"><div className="recs-spinner"></div></div>}
                 </div>
               </div>
@@ -1447,8 +1507,13 @@
                   <h2>{freshExpandedCat.title}</h2>
                   <button className="expanded-cat-close" onClick={function() { setExpandedCat(null); }}>&times;</button>
                 </div>
+                {freshExpandedCat.nyt && (
+                  <div className="expanded-cat-sub">
+                    <NytProgress list={freshExpandedCat.movies} rankedIds={rankedIds} watchlistIds={watchlistIds} isTV={isTV} />
+                  </div>
+                )}
                 <div className="expanded-cat-grid" onScroll={function(e) { handleGridScroll(e, freshExpandedCat.catKey); }}>
-                  {getExpandedMovies().map(renderCard)}
+                  {getExpandedMovies().map(function(m) { return renderCard(m, freshExpandedCat); })}
                   {isLoadingExpanded && <div className="expanded-cat-loader"><div className="recs-spinner"></div></div>}
                   {!isLoadingExpanded && !hasMoreExpanded && <div className="expanded-cat-end">That's all!</div>}
                 </div>
@@ -1915,7 +1980,10 @@
                       className={movie.poster ? "ranked-poster" : "ranked-poster-ph poster-placeholder"} />
                     <div className="ranked-item-info">
                       <div className="ranked-item-title">{movie.title}</div>
-                      <div className="ranked-item-year">{movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}</div>
+                      <div className="ranked-item-year">
+                        {movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}
+                        <NytTag id={movie.id} isTV={itemLabel === "TV show"} />
+                      </div>
                     </div>
                     <div className={`score-badge ${scoreClass(score)}`}>{score.toFixed(1)}</div>
                   </div>
@@ -3351,6 +3419,11 @@
       const c21 = rankedList.filter(m => parseInt(m.year) >= 2000).length;
       const pct = Math.round((c21 / total) * 100);
       insights.push({ icon: "🔮", text: `${pct}% of your list is from the 21st century` });
+      // NYT 100 Best
+      const nytSeen = rankedList.filter(m => nytRankFor(m.id, isTV)).length;
+      if (nytSeen > 0) {
+        insights.push({ icon: "📰", text: `You've ranked ${nytSeen} of NYT's 100 best ${isTV ? "TV shows" : "movies"} of the century` });
+      }
       // Unique genres
       if (genreSorted.length >= 5) {
         insights.push({ icon: "🎭", text: `You've explored ${genreSorted.length} different genres` });
@@ -3731,6 +3804,11 @@
                   Ranked <strong>#{rankIndex + 1}</strong> of {rankedList.length}
                   {" \u00b7 "}
                   <span className={scoreClass(score)}><strong>{score.toFixed(1)}</strong></span>
+                </div>
+              )}
+              {nytRankFor(movie.id, isTV) && (
+                <div className="movie-detail-nyt">
+                  #{nytRankFor(movie.id, isTV)} on NYT&rsquo;s {NYT_LIST_INFO[isTV ? "tv" : "movie"].name}
                 </div>
               )}
               {detailLoading && <div className="movie-detail-loading">Loading details...</div>}
@@ -4612,7 +4690,10 @@
                           className={movie.poster ? "ranked-poster" : "ranked-poster-ph poster-placeholder"} />
                         <div className="ranked-item-info">
                           <div className="ranked-item-title">{movie.title}</div>
-                          <div className="ranked-item-year">{movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}</div>
+                          <div className="ranked-item-year">
+                            {movie.year}{movie.genre ? ` \u00b7 ${movie.genre}` : ""}
+                            <NytTag id={movie.id} isTV={isTV} />
+                          </div>
                         </div>
                         <button className="watchlist-watched-btn" onClick={() => handleWatchedIt(movie)}
                           title="Watched it — rank it now!">

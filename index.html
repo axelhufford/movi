@@ -574,8 +574,8 @@
       padding: 20px 24px 16px; border-bottom: 1px solid var(--surface2); flex-shrink: 0;
     }
     .expanded-cat-header h2 {
-      font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;
-      letter-spacing: 2px; text-transform: uppercase; color: var(--text);
+      font-family: var(--font-display); font-size: 1.45rem; font-weight: 600;
+      letter-spacing: -0.01em; color: var(--text);
     }
     .expanded-cat-close {
       background: none; border: 1px solid var(--surface2); color: var(--text-muted);
@@ -1358,6 +1358,30 @@
     .activity-item.clickable:hover { background: var(--surface2); }
     .activity-item.clickable:active { transform: scale(0.995); }
 
+    /* ─── NYT "100 Best" lists ──────────────────────────────────── */
+    .nyt-progress { max-width: 420px; margin: -4px 0 12px; }
+    .nyt-progress-text {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+      font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .nyt-progress-text strong { color: var(--text); font-weight: 700; }
+    .nyt-progress-bar { height: 4px; border-radius: 2px; background: var(--border-strong); overflow: hidden; }
+    .nyt-progress-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.4s ease; }
+    .nyt-source { color: var(--accent-text); font-weight: 600; text-decoration: none; white-space: nowrap; }
+    .nyt-source:hover { text-decoration: underline; }
+    .expanded-cat-sub { padding: 14px 24px 0; flex-shrink: 0; }
+    .expanded-cat-sub .nyt-progress { margin: 0; max-width: none; }
+    .rec-card-nyt-rank {
+      position: absolute; top: 6px; left: 6px; z-index: 1;
+      min-width: 26px; padding: 1px 7px; border-radius: 6px;
+      background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm);
+      font-family: var(--font-display); font-style: italic; font-weight: 700; font-size: 0.85rem;
+      text-align: center; font-variant-numeric: tabular-nums;
+    }
+    .nyt-tag { color: var(--accent-text); font-weight: 600; white-space: nowrap; }
+    .movie-detail-nyt { margin-top: 6px; font-size: 0.8rem; font-weight: 600; color: var(--accent-text); }
+
     /* ─── Share Card ─────────────────────────────────────────────── */
     .toast { display: flex; align-items: center; gap: 14px; }
     .toast-action {
@@ -1472,6 +1496,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="movies.js"></script>
   <script src="tvshows.js"></script>
+  <script src="nyt-lists.js"></script>
   <script src="firebase-config.js"></script>
 
   <script src="app.js"></script>

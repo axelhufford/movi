@@ -31,6 +31,20 @@ const TV_DB = (typeof TV_DATA !== "undefined" ? TV_DATA : []).map(([id, title, y
   return true;
 });
 const TV_DB_IDS = new Set(TV_DB.map((m) => m.id));
+function buildNytList(rows) {
+  return rows.map(([nytRank, id, title, year, genre, poster]) => ({ id, title, year: String(year), genre, poster }));
+}
+const NYT_TV = buildNytList(typeof NYT_TV_100 !== "undefined" ? NYT_TV_100 : []);
+const NYT_MOVIES = buildNytList(typeof NYT_MOVIES_100 !== "undefined" ? NYT_MOVIES_100 : []);
+const NYT_TV_RANK = new Map(NYT_TV.map((m, i) => [m.id, i + 1]));
+const NYT_MOVIE_RANK = new Map(NYT_MOVIES.map((m, i) => [m.id, i + 1]));
+const NYT_LIST_INFO = {
+  tv: { name: "100 Best TV Shows of the 21st Century", url: "https://www.nytimes.com/bestTV" },
+  movie: { name: "100 Best Movies of the 21st Century", url: "https://www.nytimes.com/interactive/2025/movies/best-movies-21st-century.html" }
+};
+function nytRankFor(id, isTV) {
+  return (isTV ? NYT_TV_RANK : NYT_MOVIE_RANK).get(id) || null;
+}
 const TMDB_TV_SEARCH_URL = "https://api.themoviedb.org/3/search/tv";
 async function searchTMDBTV(query) {
   try {
@@ -1066,6 +1080,31 @@ async function fetchTMDBPage(endpoint, page, genreMap, isTV, existingIds) {
     return { movies: [], totalPages: 0 };
   }
 }
+function NytTag({ id, isTV }) {
+  var rank = nytRankFor(id, isTV);
+  if (!rank) return null;
+  return /* @__PURE__ */ React.createElement(React.Fragment, null, " \xB7 ", /* @__PURE__ */ React.createElement("span", { className: "nyt-tag", title: "#" + rank + " on NYT's " + NYT_LIST_INFO[isTV ? "tv" : "movie"].name }, "NYT #", rank));
+}
+function NytProgress({ list, rankedIds, watchlistIds, isTV }) {
+  var seen2 = 0, want = 0;
+  list.forEach(function(m) {
+    if (rankedIds.has(m.id)) seen2++;
+    else if (watchlistIds && watchlistIds.has(m.id)) want++;
+  });
+  var info = NYT_LIST_INFO[isTV ? "tv" : "movie"];
+  return /* @__PURE__ */ React.createElement("div", { className: "nyt-progress" }, /* @__PURE__ */ React.createElement("div", { className: "nyt-progress-text" }, /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("strong", null, seen2), " of ", list.length, " ranked", want > 0 ? " \xB7 " + want + " on watchlist" : ""), /* @__PURE__ */ React.createElement("a", { className: "nyt-source", href: info.url, target: "_blank", rel: "noopener noreferrer" }, "NYT list \u2197")), /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: "nyt-progress-bar",
+      role: "progressbar",
+      "aria-label": "Ranked from NYT's " + info.name,
+      "aria-valuemin": "0",
+      "aria-valuemax": list.length,
+      "aria-valuenow": seen2
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "nyt-progress-fill", style: { width: (list.length ? seen2 / list.length * 100 : 0) + "%" } })
+  ));
+}
 function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, rankedList, localDb, mode }) {
   const isTV = mode === "tv";
   const [tmdbCats, setTmdbCats] = useState({});
@@ -1253,6 +1292,10 @@ function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, ranked
     const popularIds = isTV ? POPULAR_TV_IDS : POPULAR_MOVIE_IDS;
     const popularIdSet = new Set(popularIds);
     const cats = [];
+    const nytList = isTV ? NYT_TV : NYT_MOVIES;
+    if (nytList.length > 0) {
+      cats.push({ title: isTV ? "NYT\u2019s 100 Best TV Shows" : "NYT\u2019s 100 Best Movies", catKey: "nyt", movies: nytList, nyt: true });
+    }
     const localForYou = rankedList && rankedList.length >= 3 ? (() => {
       const topHalf = rankedList.slice(0, Math.ceil(rankedList.length / 2));
       const genreCounts = {};
@@ -1286,9 +1329,10 @@ function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, ranked
     cats.push({ title: "Classics", catKey: "classics", movies: mergeResults(db2.filter((m) => parseInt(m.year) <= classicYear), getTmdbMovies("classics")) });
     return cats;
   }, [localDb, isTV, tmdbCats, rankedIds.size, rankedList && rankedList.length >= 3 ? rankedList.slice(0, Math.ceil(rankedList.length / 2)).map((m) => m.id).join(",") : ""]);
-  function renderCard(m) {
+  function renderCard(m, cat) {
     var isRanked = rankedIds.has(m.id);
     var isWatchlisted = watchlistIds && watchlistIds.has(m.id);
+    var nytRank = cat && cat.nyt ? nytRankFor(m.id, isTV) : null;
     return /* @__PURE__ */ React.createElement(
       "div",
       {
@@ -1301,6 +1345,7 @@ function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, ranked
           }
         }
       },
+      nytRank && /* @__PURE__ */ React.createElement("div", { className: "rec-card-nyt-rank" }, nytRank),
       isRanked && /* @__PURE__ */ React.createElement("div", { className: "rec-card-badge" }, "Ranked"),
       isWatchlisted && /* @__PURE__ */ React.createElement("div", { className: "rec-card-badge", style: { background: "rgba(245,197,24,0.9)" } }, "\u2605"),
       /* @__PURE__ */ React.createElement(
@@ -1379,18 +1424,22 @@ function Recommendations({ onSelect, onBookmark, rankedIds, watchlistIds, ranked
     return /* @__PURE__ */ React.createElement("div", { key: cat.title, className: "recs-category" }, /* @__PURE__ */ React.createElement("div", { className: "recs-category-title", onClick: function() {
       setExpandedCat(cat);
       loadMoreMovies(cat.catKey);
-    } }, cat.title, " ", /* @__PURE__ */ React.createElement("span", { className: "expand-hint" }, "See all \u203A")), /* @__PURE__ */ React.createElement("div", { className: "recs-row", onScroll: function(e) {
+    } }, cat.title, " ", /* @__PURE__ */ React.createElement("span", { className: "expand-hint" }, "See all \u203A")), cat.nyt && /* @__PURE__ */ React.createElement(NytProgress, { list: cat.movies, rankedIds, watchlistIds, isTV }), /* @__PURE__ */ React.createElement("div", { className: "recs-row", onScroll: function(e) {
       handleRowScroll(e, cat.catKey);
-    } }, visibleMovies.map(renderCard), catLoading && /* @__PURE__ */ React.createElement("div", { className: "recs-row-loader" }, /* @__PURE__ */ React.createElement("div", { className: "recs-spinner" }))));
+    } }, visibleMovies.map(function(m) {
+      return renderCard(m, cat);
+    }), catLoading && /* @__PURE__ */ React.createElement("div", { className: "recs-row-loader" }, /* @__PURE__ */ React.createElement("div", { className: "recs-spinner" }))));
   }), freshExpandedCat && /* @__PURE__ */ React.createElement("div", { className: "expanded-cat-overlay", onClick: function() {
     setExpandedCat(null);
   } }, /* @__PURE__ */ React.createElement("div", { className: "expanded-cat-modal", onClick: function(e) {
     e.stopPropagation();
   } }, /* @__PURE__ */ React.createElement("div", { className: "expanded-cat-header" }, /* @__PURE__ */ React.createElement("h2", null, freshExpandedCat.title), /* @__PURE__ */ React.createElement("button", { className: "expanded-cat-close", onClick: function() {
     setExpandedCat(null);
-  } }, "\xD7")), /* @__PURE__ */ React.createElement("div", { className: "expanded-cat-grid", onScroll: function(e) {
+  } }, "\xD7")), freshExpandedCat.nyt && /* @__PURE__ */ React.createElement("div", { className: "expanded-cat-sub" }, /* @__PURE__ */ React.createElement(NytProgress, { list: freshExpandedCat.movies, rankedIds, watchlistIds, isTV })), /* @__PURE__ */ React.createElement("div", { className: "expanded-cat-grid", onScroll: function(e) {
     handleGridScroll(e, freshExpandedCat.catKey);
-  } }, getExpandedMovies().map(renderCard), isLoadingExpanded && /* @__PURE__ */ React.createElement("div", { className: "expanded-cat-loader" }, /* @__PURE__ */ React.createElement("div", { className: "recs-spinner" })), !isLoadingExpanded && !hasMoreExpanded && /* @__PURE__ */ React.createElement("div", { className: "expanded-cat-end" }, "That's all!")))));
+  } }, getExpandedMovies().map(function(m) {
+    return renderCard(m, freshExpandedCat);
+  }), isLoadingExpanded && /* @__PURE__ */ React.createElement("div", { className: "expanded-cat-loader" }, /* @__PURE__ */ React.createElement("div", { className: "recs-spinner" })), !isLoadingExpanded && !hasMoreExpanded && /* @__PURE__ */ React.createElement("div", { className: "expanded-cat-end" }, "That's all!")))));
 }
 function SearchBar({ onSelect, onBookmark, onRerank, rankedIds, watchlistIds, localDb, searchFn, placeholder, customLabel, dupeLabel }) {
   const [query, setQuery] = useState("");
@@ -1760,7 +1809,7 @@ function RankedList({ list, onRemove, onClear, onShare, onShareCard, onMove, rea
         title: movie.title,
         className: movie.poster ? "ranked-poster" : "ranked-poster-ph poster-placeholder"
       }
-    ), /* @__PURE__ */ React.createElement("div", { className: "ranked-item-info" }, /* @__PURE__ */ React.createElement("div", { className: "ranked-item-title" }, movie.title), /* @__PURE__ */ React.createElement("div", { className: "ranked-item-year" }, movie.year, movie.genre ? ` \xB7 ${movie.genre}` : "")), /* @__PURE__ */ React.createElement("div", { className: `score-badge ${scoreClass(score)}` }, score.toFixed(1))), !readOnly && onMove && /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "ranked-item-info" }, /* @__PURE__ */ React.createElement("div", { className: "ranked-item-title" }, movie.title), /* @__PURE__ */ React.createElement("div", { className: "ranked-item-year" }, movie.year, movie.genre ? ` \xB7 ${movie.genre}` : "", /* @__PURE__ */ React.createElement(NytTag, { id: movie.id, isTV: itemLabel === "TV show" }))), /* @__PURE__ */ React.createElement("div", { className: `score-badge ${scoreClass(score)}` }, score.toFixed(1))), !readOnly && onMove && /* @__PURE__ */ React.createElement(
       "div",
       {
         className: "drag-handle",
@@ -3161,6 +3210,10 @@ function StatsView({ rankedList, watchlist, isTV }) {
   const c21 = rankedList.filter((m) => parseInt(m.year) >= 2e3).length;
   const pct = Math.round(c21 / total * 100);
   insights.push({ icon: "\u{1F52E}", text: `${pct}% of your list is from the 21st century` });
+  const nytSeen = rankedList.filter((m) => nytRankFor(m.id, isTV)).length;
+  if (nytSeen > 0) {
+    insights.push({ icon: "\u{1F4F0}", text: `You've ranked ${nytSeen} of NYT's 100 best ${isTV ? "TV shows" : "movies"} of the century` });
+  }
   if (genreSorted.length >= 5) {
     insights.push({ icon: "\u{1F3AD}", text: `You've explored ${genreSorted.length} different genres` });
   }
@@ -3449,7 +3502,7 @@ function MovieDetail({ movie, onClose, onRerank, onRemove, rankedList, isTV, onS
     movie.genre,
     tmdbDetail && tmdbDetail.runtime ? `${tmdbDetail.runtime}m` : null,
     tmdbDetail && tmdbDetail.seasons ? `${tmdbDetail.seasons} season${tmdbDetail.seasons > 1 ? "s" : ""}` : null
-  ].filter(Boolean).join(" \xB7 ")), tmdbDetail && tmdbDetail.tmdbRating && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rating" }, /* @__PURE__ */ React.createElement("span", { className: "tmdb-star" }, "\u2605"), " ", tmdbDetail.tmdbRating.toFixed(1), "/10"), isRanked && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rank" }, "Ranked ", /* @__PURE__ */ React.createElement("strong", null, "#", rankIndex + 1), " of ", rankedList.length, " \xB7 ", /* @__PURE__ */ React.createElement("span", { className: scoreClass(score) }, /* @__PURE__ */ React.createElement("strong", null, score.toFixed(1)))), detailLoading && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-loading" }, "Loading details..."), tmdbDetail && tmdbDetail.overview && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-overview" }, tmdbDetail.overview), tmdbDetail && (tmdbDetail.director || tmdbDetail.cast.length > 0) && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta" }, tmdbDetail.director && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, isTV ? "Created by" : "Director"), tmdbDetail.director), tmdbDetail.cast.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, "Cast"), tmdbDetail.cast.join(", ")))), isRanked && onRerank && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-actions" }, onShareCard && /* @__PURE__ */ React.createElement("button", { className: "movie-detail-sharecard", onClick: function() {
+  ].filter(Boolean).join(" \xB7 ")), tmdbDetail && tmdbDetail.tmdbRating && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rating" }, /* @__PURE__ */ React.createElement("span", { className: "tmdb-star" }, "\u2605"), " ", tmdbDetail.tmdbRating.toFixed(1), "/10"), isRanked && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-rank" }, "Ranked ", /* @__PURE__ */ React.createElement("strong", null, "#", rankIndex + 1), " of ", rankedList.length, " \xB7 ", /* @__PURE__ */ React.createElement("span", { className: scoreClass(score) }, /* @__PURE__ */ React.createElement("strong", null, score.toFixed(1)))), nytRankFor(movie.id, isTV) && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-nyt" }, "#", nytRankFor(movie.id, isTV), " on NYT\u2019s ", NYT_LIST_INFO[isTV ? "tv" : "movie"].name), detailLoading && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-loading" }, "Loading details..."), tmdbDetail && tmdbDetail.overview && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-overview" }, tmdbDetail.overview), tmdbDetail && (tmdbDetail.director || tmdbDetail.cast.length > 0) && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta" }, tmdbDetail.director && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, isTV ? "Created by" : "Director"), tmdbDetail.director), tmdbDetail.cast.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-meta-row" }, /* @__PURE__ */ React.createElement("span", { className: "movie-detail-meta-label" }, "Cast"), tmdbDetail.cast.join(", ")))), isRanked && onRerank && /* @__PURE__ */ React.createElement("div", { className: "movie-detail-actions" }, onShareCard && /* @__PURE__ */ React.createElement("button", { className: "movie-detail-sharecard", onClick: function() {
     onShareCard(movie, isTV);
     onClose();
   } }, "Share card"), /* @__PURE__ */ React.createElement("button", { className: "movie-detail-rerank", onClick: function() {
@@ -4218,7 +4271,7 @@ function App() {
       title: movie.title,
       className: movie.poster ? "ranked-poster" : "ranked-poster-ph poster-placeholder"
     }
-  ), /* @__PURE__ */ React.createElement("div", { className: "ranked-item-info" }, /* @__PURE__ */ React.createElement("div", { className: "ranked-item-title" }, movie.title), /* @__PURE__ */ React.createElement("div", { className: "ranked-item-year" }, movie.year, movie.genre ? ` \xB7 ${movie.genre}` : "")), /* @__PURE__ */ React.createElement(
+  ), /* @__PURE__ */ React.createElement("div", { className: "ranked-item-info" }, /* @__PURE__ */ React.createElement("div", { className: "ranked-item-title" }, movie.title), /* @__PURE__ */ React.createElement("div", { className: "ranked-item-year" }, movie.year, movie.genre ? ` \xB7 ${movie.genre}` : "", /* @__PURE__ */ React.createElement(NytTag, { id: movie.id, isTV }))), /* @__PURE__ */ React.createElement(
     "button",
     {
       className: "watchlist-watched-btn",
